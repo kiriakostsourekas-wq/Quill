@@ -1,0 +1,62 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id               String          @id @default(cuid())
+  email            String          @unique
+  name             String?
+  avatar           String?
+  stripeCustomerId String?
+  plan             String          @default("free")
+  createdAt        DateTime        @default(now())
+  socialAccounts   SocialAccount[]
+  posts            Post[]
+  voiceProfile     VoiceProfile?
+}
+
+model SocialAccount {
+  id           String   @id @default(cuid())
+  userId       String
+  platform     String
+  accessToken  String
+  refreshToken String?
+  expiresAt    DateTime?
+  accountName  String?
+  accountId    String?
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, platform])
+}
+
+model Post {
+  id          String    @id @default(cuid())
+  userId      String
+  content     String
+  platforms   String[]
+  status      String    @default("draft")
+  scheduledAt DateTime?
+  publishedAt DateTime?
+  errorLog    String?
+  createdAt   DateTime  @default(now())
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VoiceProfile {
+  id             String   @id @default(cuid())
+  userId         String   @unique
+  samplePosts    String[]
+  traits         String[]
+  sentenceLength String?
+  formality      String?
+  usesQuestions  Boolean  @default(false)
+  usesLists      Boolean  @default(false)
+  summary        String?
+  lastAnalyzedAt DateTime @default(now())
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}

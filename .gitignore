@@ -14,6 +14,8 @@ lerna-debug.log*
 node_modules
 dist
 dist-ssr
+.next
+.turbo
 *.local
 
 # Editor directories and files
@@ -31,3 +33,4 @@ dist-ssr
 .vite
 .vercel
 base44-export-*.zip
+*.tsbuildinfo
