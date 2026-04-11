@@ -29,4 +29,5 @@ dist-ssr
 
 .env
 .vite
+.vercel
 base44-export-*.zip

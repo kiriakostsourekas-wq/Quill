@@ -26,6 +26,17 @@ If a plain `npm install` triggers an `esbuild` postinstall error on your local N
 npm run build
 ```
 
+## Deploy To Vercel
+
+This repo is set up as a Vite single-page app for Vercel.
+
+1. Import the GitHub repository into Vercel.
+2. Keep the detected framework as `Vite`.
+3. Use the default build command `npm run build`.
+4. Use `dist` as the output directory if Vercel does not auto-detect it.
+
+The repository includes a `vercel.json` rewrite so deep links like `/pricing` or any future client-side route resolve to `index.html` instead of returning a Vercel 404.
+
 ## Project Structure
 
 - `src/pages/Landing.jsx`: page composition for the marketing site
