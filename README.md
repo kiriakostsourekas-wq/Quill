@@ -12,11 +12,13 @@ Quill is a Vite + React landing page for a social publishing product focused on 
 ## Local Development
 
 ```bash
-npm install
+npm install --ignore-scripts
 npm run dev
 ```
 
 The app runs locally at the URL printed by Vite, usually `http://localhost:5173`.
+
+If a plain `npm install` triggers an `esbuild` postinstall error on your local Node/npm setup, use the command above. The project builds correctly without running package install scripts.
 
 ## Build
 
