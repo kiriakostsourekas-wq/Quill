@@ -27,7 +27,7 @@ export function DashboardClient() {
   const metrics = useMemo(
     () => ({
       published: posts.filter((post) => post.status === "published").length,
-      scheduled: posts.filter((post) => post.status === "scheduled").length,
+      scheduled: posts.filter((post) => ["scheduled", "publishing"].includes(post.status)).length,
       draft: posts.filter((post) => post.status === "draft").length,
     }),
     [posts]

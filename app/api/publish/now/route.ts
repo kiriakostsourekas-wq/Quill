@@ -2,13 +2,23 @@ import { z } from "zod";
 import { NextRequest, NextResponse } from "next/server";
 import { requireRequestUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { publishPostById } from "@/lib/publishing";
+import {
+  claimAndPublishPost,
+  ImmutablePostError,
+  PublishConflictError,
+  hasPublishedDelivery,
+  syncPostDeliveries,
+} from "@/lib/publishing";
 
 const publishNowSchema = z.object({
   postId: z.string().optional(),
   content: z.string().trim().min(1),
   platforms: z.array(z.enum(["linkedin", "twitter"])).min(1).max(2),
 });
+
+function normalizedPlatforms(platforms: string[]) {
+  return [...new Set(platforms)].sort();
+}
 
 export async function POST(request: NextRequest) {
   const user = await requireRequestUser(request);
@@ -32,22 +42,58 @@ export async function POST(request: NextRequest) {
         id: postId,
         userId: user.id,
       },
+      include: {
+        deliveries: true,
+      },
     });
 
     if (!existing) {
       return NextResponse.json({ error: "Post not found" }, { status: 404 });
     }
 
+    const publishedDeliveryExists = hasPublishedDelivery(existing.deliveries);
+    const contentChanged = existing.content !== parsed.data.content;
+    const platformsChanged =
+      JSON.stringify(normalizedPlatforms(existing.platforms)) !==
+      JSON.stringify(normalizedPlatforms(parsed.data.platforms));
+
+    if (existing.status === "publishing") {
+      return NextResponse.json(
+        { error: "Post is already being published" },
+        { status: 409 }
+      );
+    }
+
+    if (existing.status === "published") {
+      return NextResponse.json(
+        { error: "Published posts cannot be republished" },
+        { status: 409 }
+      );
+    }
+
+    if (publishedDeliveryExists && (contentChanged || platformsChanged)) {
+      return NextResponse.json(
+        { error: "Partially published posts cannot be changed" },
+        { status: 409 }
+      );
+    }
+
     await prisma.post.update({
       where: { id: existing.id },
       data: {
-        content: parsed.data.content,
-        platforms: [...new Set(parsed.data.platforms)],
+        content: contentChanged ? parsed.data.content : existing.content,
+        platforms: platformsChanged ? [...new Set(parsed.data.platforms)] : existing.platforms,
         scheduledAt: null,
-        status: "draft",
+        status: publishedDeliveryExists ? existing.status : "draft",
         errorLog: null,
+        publishLeaseId: null,
+        publishLeaseExpiresAt: null,
       },
     });
+
+    if (platformsChanged) {
+      await syncPostDeliveries(existing.id, parsed.data.platforms);
+    }
   } else {
     const post = await prisma.post.create({
       data: {
@@ -57,13 +103,17 @@ export async function POST(request: NextRequest) {
         status: "draft",
       },
     });
+    await syncPostDeliveries(post.id, parsed.data.platforms);
     postId = post.id;
   }
 
   try {
-    const post = await publishPostById(postId, user.id);
+    const post = await claimAndPublishPost(postId, "manual", user.id);
     return NextResponse.json({ post });
   } catch (error) {
+    if (error instanceof PublishConflictError || error instanceof ImmutablePostError) {
+      return NextResponse.json({ error: error.message }, { status: 409 });
+    }
     return NextResponse.json(
       {
         error: error instanceof Error ? error.message : "Publishing failed",

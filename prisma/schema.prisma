@@ -35,16 +35,53 @@ model SocialAccount {
 }
 
 model Post {
-  id          String    @id @default(cuid())
-  userId      String
-  content     String
-  platforms   String[]
-  status      String    @default("draft")
-  scheduledAt DateTime?
-  publishedAt DateTime?
+  id                   String              @id @default(cuid())
+  userId               String
+  content              String
+  platforms            String[]
+  status               String              @default("draft")
+  scheduledAt          DateTime?
+  publishedAt          DateTime?
+  errorLog             String?
+  publishLeaseId       String?
+  publishLeaseExpiresAt DateTime?
+  createdAt            DateTime            @default(now())
+  user                 User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  deliveries           PostDelivery[]
+  publishAttempts      PostPublishAttempt[]
+
+  @@index([status, scheduledAt])
+}
+
+model PostDelivery {
+  id           String   @id @default(cuid())
+  postId       String
+  platform     String
+  status       String   @default("pending")
+  externalPostId String?
+  publishedAt  DateTime?
+  errorLog     String?
+  attemptCount Int      @default(0)
+  lastAttemptAt DateTime?
+  post         Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@unique([postId, platform])
+  @@index([postId, status])
+}
+
+model PostPublishAttempt {
+  id          String   @id @default(cuid())
+  postId      String
+  platform    String
+  trigger     String
+  claimId     String
+  status      String
   errorLog    String?
-  createdAt   DateTime  @default(now())
-  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+  completedAt DateTime?
+  post        Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@index([postId, createdAt])
 }
 
 model VoiceProfile {

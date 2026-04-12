@@ -139,5 +139,13 @@ export async function postToLinkedIn(
     throw new Error("LinkedIn publish failed");
   }
 
-  return response.text();
+  const body = (await response.text()).trim();
+  const externalPostId =
+    response.headers.get("x-restli-id") ??
+    response.headers.get("location") ??
+    (body || null);
+
+  return {
+    externalPostId,
+  };
 }

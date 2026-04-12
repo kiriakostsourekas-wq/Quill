@@ -2,13 +2,19 @@ import { z } from "zod";
 import { NextRequest, NextResponse } from "next/server";
 import { requireRequestUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { syncPostDeliveries } from "@/lib/publishing";
 
 const platformSchema = z.enum(["linkedin", "twitter"]);
+const scheduledAtSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .refine((value) => !Number.isNaN(new Date(value).getTime()), "Invalid scheduled date");
 
 const createPostSchema = z.object({
   content: z.string().trim().min(1, "Content is required"),
   platforms: z.array(platformSchema).min(1).max(2),
-  scheduledAt: z.string().datetime().optional(),
+  scheduledAt: scheduledAtSchema.optional(),
 });
 
 export async function GET(request: NextRequest) {
@@ -24,6 +30,17 @@ export async function GET(request: NextRequest) {
       ...(status ? { status } : {}),
     },
     orderBy: { createdAt: "desc" },
+    include: {
+      deliveries: {
+        orderBy: { platform: "asc" },
+        select: {
+          platform: true,
+          status: true,
+          publishedAt: true,
+          errorLog: true,
+        },
+      },
+    },
   });
 
   return NextResponse.json({ posts });
@@ -57,6 +74,8 @@ export async function POST(request: NextRequest) {
       status,
     },
   });
+
+  await syncPostDeliveries(post.id, parsed.data.platforms);
 
   return NextResponse.json({ post });
 }

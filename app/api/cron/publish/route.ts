@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { publishPostById } from "@/lib/publishing";
+import { claimAndPublishPost, PublishConflictError } from "@/lib/publishing";
 
 export const runtime = "nodejs";
 
@@ -30,13 +30,18 @@ async function runScheduledPublishSweep() {
   });
 
   let published = 0;
+  let skipped = 0;
   const failed: { postId: string; error: string }[] = [];
 
   for (const post of duePosts) {
     try {
-      await publishPostById(post.id);
+      await claimAndPublishPost(post.id, "cron");
       published += 1;
     } catch (error) {
+      if (error instanceof PublishConflictError) {
+        skipped += 1;
+        continue;
+      }
       failed.push({
         postId: post.id,
         error: error instanceof Error ? error.message : "Publishing failed",
@@ -47,6 +52,7 @@ async function runScheduledPublishSweep() {
   return {
     scanned: duePosts.length,
     published,
+    skipped,
     failed,
   };
 }
@@ -59,4 +65,3 @@ export async function GET(request: NextRequest) {
   const result = await runScheduledPublishSweep();
   return NextResponse.json(result);
 }
-

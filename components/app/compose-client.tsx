@@ -36,7 +36,19 @@ export function ComposeClient() {
   const [scheduleOpen, setScheduleOpen] = useState(false);
   const [scheduledAt, setScheduledAt] = useState("");
   const [rewriteLoading, setRewriteLoading] = useState(false);
+  const [feedback, setFeedback] = useState<{ type: "success" | "error"; message: string } | null>(
+    null
+  );
   const debounceRef = useRef<NodeJS.Timeout | null>(null);
+
+  async function readResponseError(response: Response, fallback: string) {
+    try {
+      const data = await response.json();
+      return data.error ?? fallback;
+    } catch {
+      return fallback;
+    }
+  }
 
   useEffect(() => {
     if (!postId) return;
@@ -118,18 +130,25 @@ export function ComposeClient() {
     });
 
     if (!response.ok) {
-      throw new Error("Unable to save post");
+      throw new Error(await readResponseError(response, "Unable to save post"));
     }
   }
 
   async function saveDraft() {
     setSaving(true);
+    setFeedback(null);
     try {
       await saveOrUpdatePost({
         content,
         platforms: selectedPlatforms,
         scheduledAt: null,
         status: "draft",
+      });
+      setFeedback({ type: "success", message: "Draft saved." });
+    } catch (error) {
+      setFeedback({
+        type: "error",
+        message: error instanceof Error ? error.message : "Unable to save draft",
       });
     } finally {
       setSaving(false);
@@ -138,6 +157,7 @@ export function ComposeClient() {
 
   async function scheduleCurrentPost() {
     setSaving(true);
+    setFeedback(null);
     try {
       await saveOrUpdatePost({
         content,
@@ -146,7 +166,12 @@ export function ComposeClient() {
         status: "scheduled",
       });
       setScheduleOpen(false);
-      setScheduledAt("");
+      setFeedback({ type: "success", message: "Post scheduled." });
+    } catch (error) {
+      setFeedback({
+        type: "error",
+        message: error instanceof Error ? error.message : "Unable to schedule post",
+      });
     } finally {
       setSaving(false);
     }
@@ -154,11 +179,21 @@ export function ComposeClient() {
 
   async function publishNow() {
     setPublishing(true);
+    setFeedback(null);
     try {
-      await fetch("/api/publish/now", {
+      const response = await fetch("/api/publish/now", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ postId: postId ?? undefined, content, platforms: selectedPlatforms }),
+      });
+      if (!response.ok) {
+        throw new Error(await readResponseError(response, "Unable to publish post"));
+      }
+      setFeedback({ type: "success", message: "Post sent for publishing." });
+    } catch (error) {
+      setFeedback({
+        type: "error",
+        message: error instanceof Error ? error.message : "Unable to publish post",
       });
     } finally {
       setPublishing(false);
@@ -167,12 +202,17 @@ export function ComposeClient() {
 
   async function rewriteInVoice() {
     setRewriteLoading(true);
+    setFeedback(null);
     try {
       const response = await fetch("/api/voice/rewrite", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text: content }),
       });
+
+      if (!response.ok) {
+        throw new Error(await readResponseError(response, "Unable to rewrite post"));
+      }
 
       const reader = response.body?.getReader();
       const decoder = new TextDecoder();
@@ -186,6 +226,11 @@ export function ComposeClient() {
         output += decoder.decode(value, { stream: true });
         setContent(output);
       }
+    } catch (error) {
+      setFeedback({
+        type: "error",
+        message: error instanceof Error ? error.message : "Unable to rewrite post",
+      });
     } finally {
       setRewriteLoading(false);
     }
@@ -240,6 +285,16 @@ export function ComposeClient() {
               {publishing ? "Publishing..." : "Publish now"}
             </Button>
           </div>
+
+          {feedback && (
+            <p
+              className={`mt-4 text-sm ${
+                feedback.type === "error" ? "text-red-600" : "text-emerald-600"
+              }`}
+            >
+              {feedback.message}
+            </p>
+          )}
 
           {scheduleOpen && (
             <div className="mt-5 rounded-xl border border-line bg-slate-50 p-4">

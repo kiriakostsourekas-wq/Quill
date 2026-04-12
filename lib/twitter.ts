@@ -148,5 +148,8 @@ export async function postTweet(accessToken: string, text: string) {
     throw new Error("Twitter publish failed");
   }
 
-  return safeJson(response);
+  const result = await safeJson<{ data?: { id?: string } }>(response);
+  return {
+    externalPostId: result.data?.id ?? null,
+  };
 }

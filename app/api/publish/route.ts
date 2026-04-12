@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { NextRequest, NextResponse } from "next/server";
 import { getRequestUser } from "@/lib/auth";
-import { publishPostById } from "@/lib/publishing";
+import { claimAndPublishPost, ImmutablePostError, PublishConflictError } from "@/lib/publishing";
 
 const publishSchema = z.object({
   postId: z.string().min(1),
@@ -14,8 +14,7 @@ export async function POST(request: NextRequest) {
   }
 
   const internalSecret = request.headers.get("x-quill-internal-secret");
-  const isInternal =
-    !!internalSecret && internalSecret === (process.env.ENCRYPTION_KEY ?? "");
+  const isInternal = !!internalSecret && internalSecret === (process.env.CRON_SECRET ?? "");
   const user = isInternal ? null : await getRequestUser(request);
 
   if (!isInternal && !user) {
@@ -23,9 +22,16 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const post = await publishPostById(parsed.data.postId, user?.id);
+    const post = await claimAndPublishPost(
+      parsed.data.postId,
+      isInternal ? "internal" : "manual",
+      user?.id
+    );
     return NextResponse.json({ post });
   } catch (error) {
+    if (error instanceof PublishConflictError || error instanceof ImmutablePostError) {
+      return NextResponse.json({ error: error.message }, { status: 409 });
+    }
     return NextResponse.json(
       {
         error: error instanceof Error ? error.message : "Publishing failed",
@@ -34,4 +40,3 @@ export async function POST(request: NextRequest) {
     );
   }
 }
-
