@@ -10,6 +10,7 @@ import { safeJson } from "@/lib/utils";
 type LinkedInStateCookie = {
   state: string;
   userId: string | null;
+  returnTo?: string | null;
 };
 
 type LinkedInProfile = {
@@ -126,9 +127,11 @@ export async function GET(request: NextRequest) {
       },
     });
 
-    const response = NextResponse.redirect(new URL("/settings?connected=linkedin", request.url), {
-      status: 303,
-    });
+    const destination =
+      payload.returnTo && payload.returnTo.startsWith("/")
+        ? payload.returnTo
+        : "/settings?connected=linkedin";
+    const response = NextResponse.redirect(new URL(destination, request.url), { status: 303 });
     appendSessionCookie(response, user.id);
     clearOAuthCookie(response, LINKEDIN_OAUTH_COOKIE_NAME);
     return response;

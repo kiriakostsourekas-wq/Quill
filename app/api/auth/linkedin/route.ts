@@ -12,10 +12,12 @@ export async function POST(request: NextRequest) {
     const user = await getRequestUser(request);
     const state = randomBytes(16).toString("hex");
     const response = NextResponse.redirect(getLinkedInAuthUrl(state), { status: 303 });
+    const returnTo = user ? "/settings?connected=linkedin" : "/dashboard";
 
     appendOAuthCookie(response, LINKEDIN_OAUTH_COOKIE_NAME, {
       state,
       userId: user?.id ?? null,
+      returnTo,
     });
 
     return response;

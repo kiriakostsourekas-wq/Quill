@@ -11,6 +11,7 @@ type TwitterStateCookie = {
   state: string;
   verifier: string;
   userId: string | null;
+  returnTo?: string | null;
 };
 
 type TwitterProfile = {
@@ -147,9 +148,11 @@ export async function GET(request: NextRequest) {
       },
     });
 
-    const response = NextResponse.redirect(new URL("/settings?connected=twitter", request.url), {
-      status: 303,
-    });
+    const destination =
+      payload.returnTo && payload.returnTo.startsWith("/")
+        ? payload.returnTo
+        : "/settings?connected=twitter";
+    const response = NextResponse.redirect(new URL(destination, request.url), { status: 303 });
     appendSessionCookie(response, user.id);
     clearOAuthCookie(response, TWITTER_OAUTH_COOKIE_NAME);
     return response;

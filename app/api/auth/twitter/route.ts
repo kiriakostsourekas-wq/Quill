@@ -17,11 +17,13 @@ export async function POST(request: NextRequest) {
     const state = randomBytes(16).toString("hex");
     const { verifier, challenge } = createTwitterPkcePair();
     const response = NextResponse.redirect(getTwitterAuthUrl(state, challenge), { status: 303 });
+    const returnTo = user ? "/settings?connected=twitter" : "/dashboard";
 
     appendOAuthCookie(response, TWITTER_OAUTH_COOKIE_NAME, {
       state,
       verifier,
       userId: user?.id ?? null,
+      returnTo,
     });
 
     return response;
