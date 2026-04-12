@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireRequestUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { ImmutablePostError, isPostImmutable, syncPostDeliveries } from "@/lib/publishing";
+import { scoreVoiceTextForUser, toStoredVoiceFields } from "@/lib/voice-dna";
 
 const platformSchema = z.enum(["linkedin", "twitter"]);
 const scheduledAtSchema = z
@@ -78,16 +79,20 @@ export async function PATCH(
     );
   }
 
+  const nextContent = parsed.data.content ?? existing.content;
+  const { result } = await scoreVoiceTextForUser(user.id, nextContent);
+
   const post = await prisma.post.update({
     where: { id: existing.id },
     data: {
-      content: parsed.data.content ?? existing.content,
+      content: nextContent,
       platforms: parsed.data.platforms
         ? [...new Set(parsed.data.platforms)]
         : existing.platforms,
       scheduledAt: nextScheduledAt,
       status: nextStatus,
       errorLog: nextStatus === "failed" ? existing.errorLog : null,
+      ...toStoredVoiceFields(result),
     },
   });
 

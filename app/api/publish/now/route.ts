@@ -9,6 +9,7 @@ import {
   hasPublishedDelivery,
   syncPostDeliveries,
 } from "@/lib/publishing";
+import { scoreVoiceTextForUser, toStoredVoiceFields } from "@/lib/voice-dna";
 
 const publishNowSchema = z.object({
   postId: z.string().optional(),
@@ -35,6 +36,7 @@ export async function POST(request: NextRequest) {
   }
 
   let postId = parsed.data.postId;
+  const { result } = await scoreVoiceTextForUser(user.id, parsed.data.content);
 
   if (postId) {
     const existing = await prisma.post.findFirst({
@@ -88,6 +90,7 @@ export async function POST(request: NextRequest) {
         errorLog: null,
         publishLeaseId: null,
         publishLeaseExpiresAt: null,
+        ...toStoredVoiceFields(result),
       },
     });
 
@@ -101,6 +104,7 @@ export async function POST(request: NextRequest) {
         content: parsed.data.content,
         platforms: [...new Set(parsed.data.platforms)],
         status: "draft",
+        ...toStoredVoiceFields(result),
       },
     });
     await syncPostDeliveries(post.id, parsed.data.platforms);

@@ -10,7 +10,10 @@ import { Button } from "@/components/ui/button";
 type VoiceScore = {
   score: number | null;
   feedback: string;
-  traits?: string[];
+  tip: string;
+  weakestSentence: string;
+  suggestions: string[];
+  traits: string[];
   summary?: string | null;
 };
 
@@ -22,6 +25,61 @@ const platformTabs: { label: string; value: PlatformMode }[] = [
   { label: "Both", value: "both" },
 ];
 
+function escapeHtml(value: string) {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/\"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function findSentenceRange(text: string, sentence: string) {
+  if (!sentence) return null;
+
+  const directIndex = text.indexOf(sentence);
+  if (directIndex !== -1) {
+    return {
+      start: directIndex,
+      end: directIndex + sentence.length,
+    };
+  }
+
+  const normalizedTarget = sentence.trim().replace(/\s+/g, " ");
+  const matches = Array.from(text.matchAll(/[^.!?\n]+(?:[.!?]+|$)/g));
+
+  for (const match of matches) {
+    const value = match[0] ?? "";
+    if (value.trim().replace(/\s+/g, " ") === normalizedTarget) {
+      return {
+        start: match.index ?? 0,
+        end: (match.index ?? 0) + value.length,
+      };
+    }
+  }
+
+  return null;
+}
+
+function replaceWeakestSentence(text: string, weakestSentence: string, replacement: string) {
+  const range = findSentenceRange(text, weakestSentence);
+  if (!range) return text;
+  return `${text.slice(0, range.start)}${replacement}${text.slice(range.end)}`;
+}
+
+function buildHighlightMarkup(text: string, weakestSentence: string) {
+  const range = findSentenceRange(text, weakestSentence);
+  if (!range) {
+    return `${escapeHtml(text)}\n`;
+  }
+
+  const before = escapeHtml(text.slice(0, range.start));
+  const target = escapeHtml(text.slice(range.start, range.end));
+  const after = escapeHtml(text.slice(range.end));
+
+  return `${before}<mark class="rounded-sm bg-transparent decoration-amber-400/90 underline decoration-2 underline-offset-2">${target}</mark>${after}\n`;
+}
+
 export function ComposeClient() {
   const searchParams = useSearchParams();
   const postId = searchParams.get("postId");
@@ -30,6 +88,9 @@ export function ComposeClient() {
   const [voice, setVoice] = useState<VoiceScore>({
     score: null,
     feedback: "Set up your Voice DNA first",
+    tip: "",
+    weakestSentence: "",
+    suggestions: [],
     traits: [],
   });
   const [loadingScore, setLoadingScore] = useState(false);
@@ -39,6 +100,8 @@ export function ComposeClient() {
   const [scheduledAt, setScheduledAt] = useState("");
   const [rewriteLoading, setRewriteLoading] = useState(false);
   const debounceRef = useRef<NodeJS.Timeout | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const highlightRef = useRef<HTMLDivElement | null>(null);
 
   async function readResponseError(response: Response, fallback: string) {
     try {
@@ -75,7 +138,14 @@ export function ComposeClient() {
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     if (!content.trim()) {
-      setVoice({ score: null, feedback: "Start writing to score your post.", traits: [] });
+      setVoice({
+        score: null,
+        feedback: "Start writing to score your post.",
+        tip: "",
+        weakestSentence: "",
+        suggestions: [],
+        traits: [],
+      });
       return;
     }
 
@@ -90,7 +160,14 @@ export function ComposeClient() {
         const result = await response.json();
         setVoice(result);
       } catch {
-        setVoice({ score: null, feedback: "Unable to score this draft right now.", traits: [] });
+        setVoice({
+          score: null,
+          feedback: "Unable to score this draft right now.",
+          tip: "",
+          weakestSentence: "",
+          suggestions: [],
+          traits: [],
+        });
       } finally {
         setLoadingScore(false);
       }
@@ -100,6 +177,12 @@ export function ComposeClient() {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
   }, [content]);
+
+  function syncHighlightScroll() {
+    if (!textareaRef.current || !highlightRef.current) return;
+    highlightRef.current.scrollTop = textareaRef.current.scrollTop;
+    highlightRef.current.scrollLeft = textareaRef.current.scrollLeft;
+  }
 
   const countLabel = useMemo(() => {
     if (platform === "linkedin") return `${content.length} / 3000`;
@@ -111,6 +194,14 @@ export function ComposeClient() {
     if (platform === "both") return ["linkedin", "twitter"];
     return [platform];
   }, [platform]);
+
+  const showVoiceProfile = Boolean(voice.traits && voice.traits.length > 0);
+  const shouldHighlightWeakest =
+    showVoiceProfile && Boolean(content.trim()) && Boolean(voice.weakestSentence.trim());
+  const highlightMarkup = useMemo(
+    () => buildHighlightMarkup(content, voice.weakestSentence),
+    [content, voice.weakestSentence]
+  );
 
   async function saveOrUpdatePost(payload: {
     content: string;
@@ -257,14 +348,42 @@ export function ComposeClient() {
             ))}
           </div>
 
-          <textarea
-            value={content}
-            onChange={(event) => setContent(event.target.value)}
-            className="quill-textarea mt-5 min-h-[320px]"
-            placeholder="Write your post here..."
-          />
+          <div className="relative mt-5">
+            {shouldHighlightWeakest && (
+              <div
+                ref={highlightRef}
+                aria-hidden="true"
+                className="pointer-events-none absolute inset-0 overflow-auto rounded-md border border-line bg-white px-3 py-3 text-sm leading-6 text-ink"
+                dangerouslySetInnerHTML={{ __html: highlightMarkup }}
+              />
+            )}
+
+            <textarea
+              ref={textareaRef}
+              value={content}
+              onChange={(event) => setContent(event.target.value)}
+              onScroll={syncHighlightScroll}
+              className={`quill-textarea min-h-[320px] ${
+                shouldHighlightWeakest ? "relative bg-transparent text-transparent" : ""
+              }`}
+              style={
+                shouldHighlightWeakest
+                  ? {
+                      caretColor: "#1A1A1A",
+                      WebkitTextFillColor: "transparent",
+                    }
+                  : undefined
+              }
+              placeholder="Write your post here..."
+            />
+          </div>
 
           <div className="mt-3 text-sm text-muted">{countLabel}</div>
+          {(platform === "twitter" || platform === "both") && (
+            <div className="mt-1 text-xs text-muted">
+              Posts over 280 chars will be auto-threaded.
+            </div>
+          )}
 
           <div className="mt-5 flex flex-wrap gap-3">
             <Button variant="outline" onClick={saveDraft} disabled={saving}>
@@ -339,7 +458,7 @@ export function ComposeClient() {
             </svg>
           </div>
 
-          {voice.traits && voice.traits.length > 0 ? (
+          {showVoiceProfile ? (
             <>
               <div className="mt-6 flex flex-wrap gap-2">
                 {voice.traits.slice(0, 3).map((trait) => (
@@ -353,6 +472,34 @@ export function ComposeClient() {
               </div>
 
               <p className="mt-4 text-sm leading-6 text-muted">{voice.feedback}</p>
+              {voice.tip && <p className="mt-2 text-sm leading-6 text-muted">{voice.tip}</p>}
+
+              {voice.suggestions.length > 0 && (
+                <ol className="mt-5 space-y-3">
+                  {voice.suggestions.map((suggestion, index) => (
+                    <li
+                      key={`${index}-${suggestion}`}
+                      className="flex items-start justify-between gap-3 rounded-lg border border-line px-3 py-3"
+                    >
+                      <div className="flex gap-3 text-sm leading-6 text-muted">
+                        <span className="font-medium text-ink">{index + 1}.</span>
+                        <span>{suggestion}</span>
+                      </div>
+                      <Button
+                        variant="outline"
+                        className="shrink-0 px-3 py-1 text-xs"
+                        onClick={() =>
+                          setContent((current) =>
+                            replaceWeakestSentence(current, voice.weakestSentence, suggestion)
+                          )
+                        }
+                      >
+                        Apply
+                      </Button>
+                    </li>
+                  ))}
+                </ol>
+              )}
 
               <Button
                 variant="outline"

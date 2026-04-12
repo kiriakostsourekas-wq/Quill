@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireRequestUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { syncPostDeliveries } from "@/lib/publishing";
+import { scoreVoiceTextForUser, toStoredVoiceFields } from "@/lib/voice-dna";
 
 const platformSchema = z.enum(["linkedin", "twitter"]);
 const scheduledAtSchema = z
@@ -64,6 +65,7 @@ export async function POST(request: NextRequest) {
 
   const scheduledAt = parsed.data.scheduledAt ? new Date(parsed.data.scheduledAt) : null;
   const status = scheduledAt ? "scheduled" : "draft";
+  const { result } = await scoreVoiceTextForUser(user.id, parsed.data.content);
 
   const post = await prisma.post.create({
     data: {
@@ -72,6 +74,7 @@ export async function POST(request: NextRequest) {
       platforms: [...new Set(parsed.data.platforms)],
       scheduledAt,
       status,
+      ...toStoredVoiceFields(result),
     },
   });
 

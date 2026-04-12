@@ -40,6 +40,12 @@ model Post {
   content              String
   platforms            String[]
   status               String              @default("draft")
+  voiceScore           Int?
+  voiceFeedback        String?
+  voiceTip             String?
+  voiceWeakestSentence String?
+  voiceSuggestions     String[]            @default([])
+  lastVoiceScoredAt    DateTime?
   scheduledAt          DateTime?
   publishedAt          DateTime?
   errorLog             String?

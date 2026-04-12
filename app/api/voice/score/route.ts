@@ -1,28 +1,11 @@
 import { z } from "zod";
 import { NextRequest, NextResponse } from "next/server";
 import { requireRequestUser } from "@/lib/auth";
-import { groq } from "@/lib/groq";
-import { prisma } from "@/lib/prisma";
-import { parseJsonObject } from "@/lib/utils";
+import { scoreVoiceTextForUser } from "@/lib/voice-dna";
 
 const scoreSchema = z.object({
   text: z.string().trim().min(1),
 });
-
-type ScoreResult = {
-  score: number;
-  feedback: string;
-};
-
-function getMessageText(content: string | Array<{ type?: string; text?: string }> | null | undefined) {
-  if (typeof content === "string") return content;
-  if (Array.isArray(content)) {
-    return content
-      .map((item) => ("text" in item ? item.text ?? "" : ""))
-      .join("");
-  }
-  return "";
-}
 
 export async function POST(request: NextRequest) {
   const user = await requireRequestUser(request);
@@ -38,41 +21,26 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const profile = await prisma.voiceProfile.findUnique({
-    where: { userId: user.id },
-  });
+  const { profile, result } = await scoreVoiceTextForUser(user.id, parsed.data.text);
 
   if (!profile) {
     return NextResponse.json({
       score: null,
       feedback: "Set up your Voice DNA first",
+      tip: "",
+      weakestSentence: "",
+      suggestions: [],
       traits: [],
       summary: null,
     });
   }
 
-  const completion = await groq.chat.completions.create({
-    model: "llama-3.3-70b-versatile",
-    response_format: { type: "json_object" },
-    messages: [
-      {
-        role: "system",
-        content:
-          "Score this text 0-100 against this voice profile. Return ONLY valid JSON: { score: number, feedback: string }",
-      },
-      {
-        role: "user",
-        content: `Voice profile: ${JSON.stringify(profile)}\n\nText:\n${parsed.data.text}`,
-      },
-    ],
-  });
-
-  const content = getMessageText(completion.choices[0]?.message?.content);
-  const result = parseJsonObject<ScoreResult>(content);
-
   return NextResponse.json({
-    score: result.score,
-    feedback: result.feedback,
+    score: result?.score ?? null,
+    feedback: result?.feedback ?? "Set up your Voice DNA first",
+    tip: result?.tip ?? "",
+    weakestSentence: result?.weakestSentence ?? "",
+    suggestions: result?.suggestions ?? [],
     traits: profile.traits.slice(0, 3),
     summary: profile.summary,
   });

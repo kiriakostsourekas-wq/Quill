@@ -18,6 +18,17 @@ type AnalyticsState = {
   chart: Array<{ date: string; count: number }>;
 };
 
+type VoiceReportState = {
+  averageVoiceScore: number | null;
+  totalPostsThisWeek: number;
+  consistencyStreak: number;
+  bestPost: {
+    id: string;
+    content: string;
+    score: number | null;
+  } | null;
+};
+
 function AnalyticsSkeleton() {
   return (
     <section className="space-y-6">
@@ -42,15 +53,32 @@ function AnalyticsSkeleton() {
 
 export function AnalyticsClient() {
   const [analytics, setAnalytics] = useState<AnalyticsState | null>(null);
+  const [voiceReport, setVoiceReport] = useState<VoiceReportState | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch("/api/analytics")
-      .then((response) => response.json())
-      .then((data) => setAnalytics(data))
-      .catch(() => setAnalytics(null))
+    Promise.all([fetch("/api/analytics"), fetch("/api/analytics/voice-report")])
+      .then(async ([analyticsResponse, voiceResponse]) => {
+        const [analyticsData, voiceData] = await Promise.all([
+          analyticsResponse.json(),
+          voiceResponse.json(),
+        ]);
+        setAnalytics(analyticsData);
+        setVoiceReport(voiceData);
+      })
+      .catch(() => {
+        setAnalytics(null);
+        setVoiceReport(null);
+      })
       .finally(() => setLoading(false));
   }, []);
+
+  const voiceBadgeClasses =
+    (voiceReport?.averageVoiceScore ?? 0) > 80
+      ? "bg-emerald-50 text-emerald-700"
+      : (voiceReport?.averageVoiceScore ?? 0) >= 60
+        ? "bg-amber-50 text-amber-700"
+        : "bg-red-50 text-red-700";
 
   if (loading) {
     return <AnalyticsSkeleton />;
@@ -77,6 +105,56 @@ export function AnalyticsClient() {
             <p className="mt-3 text-3xl font-semibold text-ink">{metric.value}</p>
           </div>
         ))}
+      </div>
+
+      <div className="quill-card p-6">
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <h2 className="text-lg font-semibold text-ink">Voice Health</h2>
+            <p className="mt-1 text-sm text-muted">
+              See how consistently your published work matches the voice you trained.
+            </p>
+          </div>
+          <span className={`inline-flex rounded-full px-3 py-1 text-sm font-medium ${voiceBadgeClasses}`}>
+            Avg score: {voiceReport?.averageVoiceScore ?? "—"}
+          </span>
+        </div>
+
+        <div className="mt-5 grid gap-4 md:grid-cols-3">
+          <div className="rounded-lg border border-line p-4">
+            <p className="text-sm text-muted">Consistency streak</p>
+            <p className="mt-2 text-2xl font-semibold text-ink">
+              {voiceReport?.consistencyStreak ?? 0} days
+            </p>
+          </div>
+
+          <div className="rounded-lg border border-line p-4">
+            <p className="text-sm text-muted">Scored this week</p>
+            <p className="mt-2 text-2xl font-semibold text-ink">
+              {voiceReport?.totalPostsThisWeek ?? 0}
+            </p>
+          </div>
+
+          <div className="rounded-lg border border-line p-4">
+            <p className="text-sm text-muted">Best post</p>
+            <p
+              className="mt-2 text-sm leading-6 text-ink"
+              style={{
+                display: "-webkit-box",
+                WebkitBoxOrient: "vertical",
+                WebkitLineClamp: 2,
+                overflow: "hidden",
+              }}
+            >
+              {voiceReport?.bestPost?.content ?? "No scored posts yet."}
+            </p>
+            {voiceReport?.bestPost?.score !== null && voiceReport?.bestPost?.score !== undefined && (
+              <p className="mt-2 text-xs text-muted">
+                Highest score: {voiceReport.bestPost.score}
+              </p>
+            )}
+          </div>
+        </div>
       </div>
 
       <div className="quill-card p-6">
