@@ -28,9 +28,7 @@ export default function Hero() {
           </Button>
         </div>
 
-        <p className="mt-5 text-sm text-muted-foreground">
-          14-day trial · No credit card required
-        </p>
+        <p className="mt-5 text-sm text-muted-foreground">7-day free trial · Cancel anytime</p>
       </div>
     </section>
   );

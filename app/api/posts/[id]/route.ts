@@ -2,7 +2,6 @@ import { z } from "zod";
 import { NextRequest, NextResponse } from "next/server";
 import { requireRequestUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { removeScheduledPost, schedulePost } from "@/lib/queue";
 
 const platformSchema = z.enum(["linkedin", "twitter"]);
 
@@ -63,15 +62,6 @@ export async function PATCH(
     );
   }
 
-  const scheduleChanged =
-    existing.status === "scheduled" &&
-    (nextStatus !== "scheduled" ||
-      existing.scheduledAt?.getTime() !== nextScheduledAt?.getTime());
-
-  if (scheduleChanged) {
-    await removeScheduledPost(existing.id);
-  }
-
   const post = await prisma.post.update({
     where: { id: existing.id },
     data: {
@@ -84,26 +74,6 @@ export async function PATCH(
       errorLog: nextStatus === "failed" ? existing.errorLog : null,
     },
   });
-
-  if (nextStatus === "scheduled" && nextScheduledAt) {
-    try {
-      await schedulePost(post.id, nextScheduledAt.getTime() - Date.now());
-    } catch (error) {
-      await prisma.post.update({
-        where: { id: post.id },
-        data: {
-          status: "failed",
-          errorLog: error instanceof Error ? error.message : "Scheduling failed",
-        },
-      });
-      return NextResponse.json(
-        {
-          error: error instanceof Error ? error.message : "Scheduling failed",
-        },
-        { status: 400 }
-      );
-    }
-  }
 
   return NextResponse.json({ post });
 }
@@ -126,10 +96,6 @@ export async function DELETE(
 
   if (!post) {
     return NextResponse.json({ error: "Post not found" }, { status: 404 });
-  }
-
-  if (post.status === "scheduled") {
-    await removeScheduledPost(post.id);
   }
 
   await prisma.post.delete({ where: { id: post.id } });

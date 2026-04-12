@@ -16,7 +16,7 @@ const faqs = [
   },
   {
     q: 'Do I need to pay to try Quill?',
-    a: 'No. Every plan includes a 14-day free trial and we don\'t require a credit card to get started. Try everything risk-free.',
+    a: 'Every plan includes a 7-day free trial. You\'ll add a card when you start, but you won\'t be charged until the trial ends unless you cancel first.',
   },
   {
     q: 'How is Quill different from Buffer or Hypefury?',

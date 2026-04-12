@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { NextRequest, NextResponse } from "next/server";
 import { requireRequestUser } from "@/lib/auth";
-import { openai } from "@/lib/openai";
+import { groq } from "@/lib/groq";
 import { prisma } from "@/lib/prisma";
 import { parseJsonObject } from "@/lib/utils";
 
@@ -42,8 +42,8 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const completion = await openai.chat.completions.create({
-    model: "gpt-4o",
+  const completion = await groq.chat.completions.create({
+    model: "llama-3.3-70b-versatile",
     response_format: { type: "json_object" },
     messages: [
       {
@@ -87,4 +87,3 @@ export async function POST(request: NextRequest) {
 
   return NextResponse.json({ profile });
 }
-

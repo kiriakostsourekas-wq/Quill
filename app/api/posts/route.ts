@@ -2,7 +2,6 @@ import { z } from "zod";
 import { NextRequest, NextResponse } from "next/server";
 import { requireRequestUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { schedulePost } from "@/lib/queue";
 
 const platformSchema = z.enum(["linkedin", "twitter"]);
 
@@ -58,26 +57,6 @@ export async function POST(request: NextRequest) {
       status,
     },
   });
-
-  if (scheduledAt) {
-    try {
-      await schedulePost(post.id, scheduledAt.getTime() - Date.now());
-    } catch (error) {
-      await prisma.post.update({
-        where: { id: post.id },
-        data: {
-          status: "failed",
-          errorLog: error instanceof Error ? error.message : "Scheduling failed",
-        },
-      });
-      return NextResponse.json(
-        {
-          error: error instanceof Error ? error.message : "Scheduling failed",
-        },
-        { status: 400 }
-      );
-    }
-  }
 
   return NextResponse.json({ post });
 }

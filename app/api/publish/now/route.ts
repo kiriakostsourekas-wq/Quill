@@ -3,7 +3,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireRequestUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { publishPostById } from "@/lib/publishing";
-import { removeScheduledPost } from "@/lib/queue";
 
 const publishNowSchema = z.object({
   postId: z.string().optional(),
@@ -37,10 +36,6 @@ export async function POST(request: NextRequest) {
 
     if (!existing) {
       return NextResponse.json({ error: "Post not found" }, { status: 404 });
-    }
-
-    if (existing.status === "scheduled") {
-      await removeScheduledPost(existing.id);
     }
 
     await prisma.post.update({
@@ -77,4 +72,3 @@ export async function POST(request: NextRequest) {
     );
   }
 }
-

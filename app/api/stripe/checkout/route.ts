@@ -25,6 +25,7 @@ export async function POST(request: NextRequest) {
   const session = await stripe.checkout.sessions.create({
     mode: "subscription",
     customer: customerId,
+    payment_method_collection: "always",
     line_items: [{ price: priceId, quantity: 1 }],
     success_url: successUrl,
     cancel_url: cancelUrl,
@@ -33,6 +34,7 @@ export async function POST(request: NextRequest) {
       plan: parsed.data.plan,
     },
     subscription_data: {
+      trial_period_days: 7,
       metadata: {
         userId: user.id,
         plan: parsed.data.plan,
@@ -42,4 +44,3 @@ export async function POST(request: NextRequest) {
 
   return NextResponse.json({ url: session.url });
 }
-
