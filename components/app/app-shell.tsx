@@ -94,7 +94,7 @@ export function AppShell({ user, children }: AppShellProps) {
               </div>
 
               <div className="hidden text-sm text-muted lg:block">
-                app.quill-ai-tool.vercel.app
+                quill-ai-tool.vercel.app
               </div>
 
               <div className="relative">
