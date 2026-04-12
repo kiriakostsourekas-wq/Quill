@@ -66,7 +66,14 @@ async function resolveAppUser(payload: LinkedInStateCookie | null, profile: Link
 export async function GET(request: NextRequest) {
   const code = request.nextUrl.searchParams.get("code");
   const state = request.nextUrl.searchParams.get("state");
+  const providerError = request.nextUrl.searchParams.get("error");
   const payload = readOAuthCookie<LinkedInStateCookie>(request, LINKEDIN_OAUTH_COOKIE_NAME);
+
+  if (providerError) {
+    const response = buildFailureRedirect(request, "/login?error=linkedin_denied");
+    clearOAuthCookie(response, LINKEDIN_OAUTH_COOKIE_NAME);
+    return response;
+  }
 
   if (!code || !state || !payload || payload.state !== state) {
     const response = buildFailureRedirect(request);
@@ -125,7 +132,8 @@ export async function GET(request: NextRequest) {
     appendSessionCookie(response, user.id);
     clearOAuthCookie(response, LINKEDIN_OAUTH_COOKIE_NAME);
     return response;
-  } catch {
+  } catch (error) {
+    console.error("LinkedIn OAuth callback failed", error);
     const response = buildFailureRedirect(request);
     clearOAuthCookie(response, LINKEDIN_OAUTH_COOKIE_NAME);
     return response;

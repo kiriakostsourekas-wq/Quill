@@ -11,20 +11,33 @@ function baseUrl() {
   return process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
 }
 
+export function assertLinkedInAuthConfig() {
+  if (!process.env.NEXT_PUBLIC_APP_URL) {
+    throw new Error("NEXT_PUBLIC_APP_URL is not configured");
+  }
+
+  if (!process.env.LINKEDIN_CLIENT_ID) {
+    throw new Error("LINKEDIN_CLIENT_ID is not configured");
+  }
+
+  if (!process.env.LINKEDIN_CLIENT_SECRET) {
+    throw new Error("LINKEDIN_CLIENT_SECRET is not configured");
+  }
+}
+
 export function getLinkedInAuthUrl(state = randomBytes(16).toString("hex")) {
+  assertLinkedInAuthConfig();
   const url = new URL("https://www.linkedin.com/oauth/v2/authorization");
   url.searchParams.set("response_type", "code");
   url.searchParams.set("client_id", process.env.LINKEDIN_CLIENT_ID ?? "");
-  url.searchParams.set(
-    "redirect_uri",
-    `${baseUrl()}/api/auth/linkedin/callback`
-  );
+  url.searchParams.set("redirect_uri", `${baseUrl()}/api/auth/linkedin/callback`);
   url.searchParams.set("scope", LINKEDIN_SCOPES.join(" "));
   url.searchParams.set("state", state);
   return url.toString();
 }
 
 export async function exchangeLinkedInCode(code: string) {
+  assertLinkedInAuthConfig();
   const body = new URLSearchParams({
     grant_type: "authorization_code",
     code,
@@ -40,7 +53,10 @@ export async function exchangeLinkedInCode(code: string) {
   });
 
   if (!response.ok) {
-    throw new Error("Failed to exchange LinkedIn authorization code");
+    const details = await response.text();
+    throw new Error(
+      `Failed to exchange LinkedIn authorization code (${response.status}): ${details || "no response body"}`
+    );
   }
 
   return safeJson<{
@@ -52,6 +68,7 @@ export async function exchangeLinkedInCode(code: string) {
 }
 
 export async function refreshLinkedInToken(refreshToken: string) {
+  assertLinkedInAuthConfig();
   const body = new URLSearchParams({
     grant_type: "refresh_token",
     refresh_token: refreshToken,
@@ -66,7 +83,10 @@ export async function refreshLinkedInToken(refreshToken: string) {
   });
 
   if (!response.ok) {
-    throw new Error("Failed to refresh LinkedIn token");
+    const details = await response.text();
+    throw new Error(
+      `Failed to refresh LinkedIn token (${response.status}): ${details || "no response body"}`
+    );
   }
 
   return safeJson<{
@@ -149,7 +169,10 @@ export async function postToLinkedIn(
   });
 
   if (!response.ok) {
-    throw new Error("LinkedIn publish failed");
+    const details = await response.text();
+    throw new Error(
+      `LinkedIn publish failed (${response.status}): ${details || "no response body"}`
+    );
   }
 
   const body = (await response.text()).trim();

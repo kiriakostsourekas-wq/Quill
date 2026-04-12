@@ -84,7 +84,14 @@ async function resolveAppUser(payload: TwitterStateCookie | null, profile: Twitt
 export async function GET(request: NextRequest) {
   const code = request.nextUrl.searchParams.get("code");
   const state = request.nextUrl.searchParams.get("state");
+  const providerError = request.nextUrl.searchParams.get("error");
   const payload = readOAuthCookie<TwitterStateCookie>(request, TWITTER_OAUTH_COOKIE_NAME);
+
+  if (providerError) {
+    const response = buildFailureRedirect(request, "/login?error=twitter_denied");
+    clearOAuthCookie(response, TWITTER_OAUTH_COOKIE_NAME);
+    return response;
+  }
 
   if (!code || !state || !payload || payload.state !== state) {
     const response = buildFailureRedirect(request);
@@ -146,7 +153,8 @@ export async function GET(request: NextRequest) {
     appendSessionCookie(response, user.id);
     clearOAuthCookie(response, TWITTER_OAUTH_COOKIE_NAME);
     return response;
-  } catch {
+  } catch (error) {
+    console.error("Twitter OAuth callback failed", error);
     const response = buildFailureRedirect(request);
     clearOAuthCookie(response, TWITTER_OAUTH_COOKIE_NAME);
     return response;

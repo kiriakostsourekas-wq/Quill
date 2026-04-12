@@ -2,19 +2,27 @@ import { randomBytes } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { getRequestUser } from "@/lib/auth";
 import { LINKEDIN_OAUTH_COOKIE_NAME } from "@/lib/constants";
-import { getLinkedInAuthUrl } from "@/lib/linkedin";
+import { assertLinkedInAuthConfig, getLinkedInAuthUrl } from "@/lib/linkedin";
 import { appendOAuthCookie } from "@/lib/oauth";
 
 export async function POST(request: NextRequest) {
-  const user = await getRequestUser(request);
-  const state = randomBytes(16).toString("hex");
-  const response = NextResponse.redirect(getLinkedInAuthUrl(state), { status: 303 });
+  try {
+    assertLinkedInAuthConfig();
 
-  appendOAuthCookie(response, LINKEDIN_OAUTH_COOKIE_NAME, {
-    state,
-    userId: user?.id ?? null,
-  });
+    const user = await getRequestUser(request);
+    const state = randomBytes(16).toString("hex");
+    const response = NextResponse.redirect(getLinkedInAuthUrl(state), { status: 303 });
 
-  return response;
+    appendOAuthCookie(response, LINKEDIN_OAUTH_COOKIE_NAME, {
+      state,
+      userId: user?.id ?? null,
+    });
+
+    return response;
+  } catch (error) {
+    console.error("LinkedIn OAuth start failed", error);
+    return NextResponse.redirect(new URL("/login?error=linkedin_not_configured", request.url), {
+      status: 303,
+    });
+  }
 }
-

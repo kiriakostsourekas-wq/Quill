@@ -10,6 +10,20 @@ function baseUrl() {
   return process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
 }
 
+export function assertTwitterAuthConfig() {
+  if (!process.env.NEXT_PUBLIC_APP_URL) {
+    throw new Error("NEXT_PUBLIC_APP_URL is not configured");
+  }
+
+  if (!process.env.TWITTER_CLIENT_ID) {
+    throw new Error("TWITTER_CLIENT_ID is not configured");
+  }
+
+  if (!process.env.TWITTER_CLIENT_SECRET) {
+    throw new Error("TWITTER_CLIENT_SECRET is not configured");
+  }
+}
+
 function toBase64Url(input: Buffer) {
   return input
     .toString("base64")
@@ -28,6 +42,7 @@ export function getTwitterAuthUrl(
   state = randomBytes(16).toString("hex"),
   challenge = ""
 ) {
+  assertTwitterAuthConfig();
   const url = new URL("https://twitter.com/i/oauth2/authorize");
   url.searchParams.set("response_type", "code");
   url.searchParams.set("client_id", process.env.TWITTER_CLIENT_ID ?? "");
@@ -40,6 +55,7 @@ export function getTwitterAuthUrl(
 }
 
 export async function exchangeTwitterCode(code: string, verifier: string) {
+  assertTwitterAuthConfig();
   const clientId = process.env.TWITTER_CLIENT_ID ?? "";
   const clientSecret = process.env.TWITTER_CLIENT_SECRET ?? "";
   const basic = Buffer.from(`${clientId}:${clientSecret}`).toString("base64");
@@ -62,7 +78,10 @@ export async function exchangeTwitterCode(code: string, verifier: string) {
   });
 
   if (!response.ok) {
-    throw new Error("Failed to exchange Twitter authorization code");
+    const details = await response.text();
+    throw new Error(
+      `Failed to exchange Twitter authorization code (${response.status}): ${details || "no response body"}`
+    );
   }
 
   return safeJson<{
@@ -73,6 +92,7 @@ export async function exchangeTwitterCode(code: string, verifier: string) {
 }
 
 export async function refreshTwitterToken(refreshToken: string) {
+  assertTwitterAuthConfig();
   const clientId = process.env.TWITTER_CLIENT_ID ?? "";
   const clientSecret = process.env.TWITTER_CLIENT_SECRET ?? "";
   const basic = Buffer.from(`${clientId}:${clientSecret}`).toString("base64");
@@ -93,7 +113,10 @@ export async function refreshTwitterToken(refreshToken: string) {
   });
 
   if (!response.ok) {
-    throw new Error("Failed to refresh Twitter token");
+    const details = await response.text();
+    throw new Error(
+      `Failed to refresh Twitter token (${response.status}): ${details || "no response body"}`
+    );
   }
 
   return safeJson<{
@@ -159,7 +182,10 @@ export async function postTweet(accessToken: string, text: string) {
   });
 
   if (!response.ok) {
-    throw new Error("Twitter publish failed");
+    const details = await response.text();
+    throw new Error(
+      `Twitter publish failed (${response.status}): ${details || "no response body"}`
+    );
   }
 
   const result = await safeJson<{ data?: { id?: string } }>(response);

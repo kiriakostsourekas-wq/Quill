@@ -3,9 +3,28 @@ import Link from "next/link";
 import { getCurrentUser } from "@/lib/auth";
 import { QuillLogo } from "@/components/quill-logo";
 
-export default async function LoginPage() {
+const errorMessages: Record<string, string> = {
+  linkedin_not_configured:
+    "LinkedIn sign-in is not configured correctly in production. Check LINKEDIN_CLIENT_ID, LINKEDIN_CLIENT_SECRET, and NEXT_PUBLIC_APP_URL in Vercel.",
+  linkedin_denied: "LinkedIn sign-in was cancelled before it completed.",
+  linkedin_auth:
+    "LinkedIn sign-in failed after the provider callback. Check the callback logs in Vercel and confirm the LinkedIn app products and secret are correct.",
+  twitter_not_configured:
+    "X sign-in is not configured correctly in production. TWITTER_CLIENT_ID or TWITTER_CLIENT_SECRET is missing in Vercel.",
+  twitter_denied: "X sign-in was cancelled before it completed.",
+  twitter_auth:
+    "X sign-in failed after the provider callback. Check the callback logs in Vercel and confirm the X app credentials are correct.",
+};
+
+export default async function LoginPage({
+  searchParams,
+}: {
+  searchParams?: { error?: string };
+}) {
   const user = await getCurrentUser();
   if (user) redirect("/dashboard");
+
+  const errorMessage = searchParams?.error ? errorMessages[searchParams.error] : null;
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-[#F3F4F6] px-6 py-12">
@@ -17,6 +36,12 @@ export default async function LoginPage() {
             Use LinkedIn or X to create your account or sign back in.
           </p>
         </div>
+
+        {errorMessage && (
+          <div className="mt-6 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            {errorMessage}
+          </div>
+        )}
 
         <div className="mt-8 space-y-3">
           <form action="/api/auth/linkedin" method="post">
