@@ -52,4 +52,6 @@ npm run build
 3. Set `CRON_SECRET` in Vercel. Vercel Cron will send it automatically as `Authorization: Bearer <CRON_SECRET>` when calling `/api/cron/publish`.
 4. Ensure `NEXT_PUBLIC_APP_URL` matches the deployed product app domain.
 
-`vercel.json` already schedules `/api/cron/publish` to run every minute.
+`vercel.json` schedules `/api/cron/publish` once per day at `00:00 UTC` so the project deploys on the Vercel Hobby plan.
+
+If you need minute-level scheduled publishing, upgrade the project to Vercel Pro and change the cron expression back to `* * * * *`.
