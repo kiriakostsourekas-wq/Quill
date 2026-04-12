@@ -12,9 +12,9 @@ export default async function LoginPage() {
       <div className="quill-card w-full max-w-md p-8">
         <div className="flex flex-col items-center text-center">
           <QuillLogo />
-          <h1 className="mt-6 text-2xl font-semibold text-ink">Welcome back to Quill.</h1>
+          <h1 className="mt-6 text-2xl font-semibold text-ink">Continue with Quill.</h1>
           <p className="mt-2 text-sm text-muted">
-            Sign in to manage your voice-aware social publishing workflow.
+            Use LinkedIn or X to create your account or sign back in.
           </p>
         </div>
 
@@ -53,6 +53,13 @@ export default async function LoginPage() {
             Privacy Policy
           </a>
           .
+        </p>
+
+        <p className="mt-4 text-center text-sm text-muted">
+          Prefer to start from the public home page?{" "}
+          <Link className="font-medium text-brand hover:underline" href="/">
+            Go home
+          </Link>
         </p>
       </div>
     </main>

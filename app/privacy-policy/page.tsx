@@ -29,7 +29,7 @@ export default function PrivacyPolicyPage() {
       <div className="mx-auto max-w-4xl">
         <div className="flex items-center justify-between">
           <QuillLogo />
-          <Link href="/login" className="text-sm text-muted hover:text-ink">
+          <Link href="/" className="text-sm text-muted hover:text-ink">
             Back to app
           </Link>
         </div>
