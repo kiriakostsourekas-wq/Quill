@@ -1,8 +1,10 @@
 "use client";
 
 import Link from "next/link";
+import { format } from "date-fns";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 
 type VoiceScore = {
@@ -36,9 +38,6 @@ export function ComposeClient() {
   const [scheduleOpen, setScheduleOpen] = useState(false);
   const [scheduledAt, setScheduledAt] = useState("");
   const [rewriteLoading, setRewriteLoading] = useState(false);
-  const [feedback, setFeedback] = useState<{ type: "success" | "error"; message: string } | null>(
-    null
-  );
   const debounceRef = useRef<NodeJS.Timeout | null>(null);
 
   async function readResponseError(response: Response, fallback: string) {
@@ -136,7 +135,6 @@ export function ComposeClient() {
 
   async function saveDraft() {
     setSaving(true);
-    setFeedback(null);
     try {
       await saveOrUpdatePost({
         content,
@@ -144,12 +142,9 @@ export function ComposeClient() {
         scheduledAt: null,
         status: "draft",
       });
-      setFeedback({ type: "success", message: "Draft saved." });
+      toast.success("Post saved as draft.");
     } catch (error) {
-      setFeedback({
-        type: "error",
-        message: error instanceof Error ? error.message : "Unable to save draft",
-      });
+      toast.error(error instanceof Error ? error.message : "Unable to save draft");
     } finally {
       setSaving(false);
     }
@@ -157,7 +152,6 @@ export function ComposeClient() {
 
   async function scheduleCurrentPost() {
     setSaving(true);
-    setFeedback(null);
     try {
       await saveOrUpdatePost({
         content,
@@ -166,12 +160,9 @@ export function ComposeClient() {
         status: "scheduled",
       });
       setScheduleOpen(false);
-      setFeedback({ type: "success", message: "Post scheduled." });
+      toast.success(`Post scheduled for ${format(new Date(scheduledAt), "PPP p")}.`);
     } catch (error) {
-      setFeedback({
-        type: "error",
-        message: error instanceof Error ? error.message : "Unable to schedule post",
-      });
+      toast.error(error instanceof Error ? error.message : "Unable to schedule post");
     } finally {
       setSaving(false);
     }
@@ -179,7 +170,6 @@ export function ComposeClient() {
 
   async function publishNow() {
     setPublishing(true);
-    setFeedback(null);
     try {
       const response = await fetch("/api/publish/now", {
         method: "POST",
@@ -189,11 +179,15 @@ export function ComposeClient() {
       if (!response.ok) {
         throw new Error(await readResponseError(response, "Unable to publish post"));
       }
-      setFeedback({ type: "success", message: "Post sent for publishing." });
+      toast.success("Post published.");
     } catch (error) {
-      setFeedback({
-        type: "error",
-        message: error instanceof Error ? error.message : "Unable to publish post",
+      toast.error(error instanceof Error ? error.message : "Unable to publish post", {
+        action: {
+          label: "Retry",
+          onClick: () => {
+            void publishNow();
+          },
+        },
       });
     } finally {
       setPublishing(false);
@@ -202,7 +196,6 @@ export function ComposeClient() {
 
   async function rewriteInVoice() {
     setRewriteLoading(true);
-    setFeedback(null);
     try {
       const response = await fetch("/api/voice/rewrite", {
         method: "POST",
@@ -227,10 +220,7 @@ export function ComposeClient() {
         setContent(output);
       }
     } catch (error) {
-      setFeedback({
-        type: "error",
-        message: error instanceof Error ? error.message : "Unable to rewrite post",
-      });
+      toast.error(error instanceof Error ? error.message : "Unable to rewrite post");
     } finally {
       setRewriteLoading(false);
     }
@@ -285,16 +275,6 @@ export function ComposeClient() {
               {publishing ? "Publishing..." : "Publish now"}
             </Button>
           </div>
-
-          {feedback && (
-            <p
-              className={`mt-4 text-sm ${
-                feedback.type === "error" ? "text-red-600" : "text-emerald-600"
-              }`}
-            >
-              {feedback.message}
-            </p>
-          )}
 
           {scheduleOpen && (
             <div className="mt-5 rounded-xl border border-line bg-slate-50 p-4">
@@ -385,7 +365,7 @@ export function ComposeClient() {
             </>
           ) : (
             <div className="mt-6 rounded-xl border border-dashed border-brand/30 bg-brand-light/40 p-4 text-sm leading-6 text-muted">
-              Set up your Voice DNA to unlock scoring →{" "}
+              Set up Voice DNA to unlock scoring.{" "}
               <Link href="/voice-dna" className="font-medium text-brand hover:underline">
                 Go to Voice DNA
               </Link>

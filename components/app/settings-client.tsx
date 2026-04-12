@@ -1,6 +1,9 @@
 "use client";
 
+import { format } from "date-fns";
 import { useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/app/status-badge";
 
@@ -16,17 +19,34 @@ type UserState = {
   plan: string;
 };
 
+type SubscriptionState = {
+  plan: string;
+  status: string | null;
+  currentPeriodEnd: string | null;
+  cancelAtPeriodEnd: boolean;
+};
+
 export function SettingsClient() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [user, setUser] = useState<UserState | null>(null);
+  const [subscription, setSubscription] = useState<SubscriptionState | null>(null);
   const [name, setName] = useState("");
+  const [connectingPlatform, setConnectingPlatform] = useState<string | null>(null);
 
   async function loadSettings() {
-    const [accountsRes, meRes] = await Promise.all([fetch("/api/accounts"), fetch("/api/me")]);
+    const [accountsRes, meRes, subscriptionRes] = await Promise.all([
+      fetch("/api/accounts"),
+      fetch("/api/me"),
+      fetch("/api/stripe/subscription"),
+    ]);
     const accountsData = await accountsRes.json();
     const meData = await meRes.json();
+    const subscriptionData = await subscriptionRes.json();
     setAccounts(accountsData.accounts ?? []);
     setUser(meData.user ?? null);
+    setSubscription(subscriptionData ?? null);
     setName(meData.user?.name ?? "");
   }
 
@@ -34,28 +54,58 @@ export function SettingsClient() {
     loadSettings().catch(() => undefined);
   }, []);
 
+  useEffect(() => {
+    const connected = searchParams.get("connected");
+    if (!connected) return;
+
+    toast.success(connected === "linkedin" ? "LinkedIn account connected." : "X account connected.");
+
+    const next = new URLSearchParams(searchParams.toString());
+    next.delete("connected");
+    router.replace(next.toString() ? `/settings?${next.toString()}` : "/settings");
+  }, [router, searchParams]);
+
   async function disconnect(platform: string) {
-    await fetch(`/api/accounts/${platform}`, { method: "DELETE" });
+    const response = await fetch(`/api/accounts/${platform}`, { method: "DELETE" });
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      toast.error(data.error ?? "Unable to disconnect account");
+      return;
+    }
+    toast.success(platform === "linkedin" ? "LinkedIn account disconnected." : "X account disconnected.");
     await loadSettings();
   }
 
   async function saveName() {
-    await fetch("/api/me", {
+    const response = await fetch("/api/me", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name }),
     });
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      toast.error(data.error ?? "Unable to update name");
+      return;
+    }
     await loadSettings();
   }
 
   async function manageBilling() {
     const response = await fetch("/api/stripe/portal", { method: "POST" });
     const data = await response.json();
-    if (data.url) window.location.href = data.url;
+    if (data.url) {
+      window.location.href = data.url;
+      return;
+    }
+    toast.error(data.error ?? "Unable to open billing portal");
   }
 
   const linkedIn = accounts.find((account) => account.platform === "linkedin");
   const twitter = accounts.find((account) => account.platform === "twitter");
+
+  const billingDateLabel = subscription?.currentPeriodEnd
+    ? format(new Date(subscription.currentPeriodEnd), "PPP")
+    : "Not available";
 
   return (
     <section className="space-y-8">
@@ -82,8 +132,14 @@ export function SettingsClient() {
                     Disconnect
                   </Button>
                 ) : (
-                  <form action={`/api/auth/${item.platform}`} method="post">
-                    <Button type="submit">Connect</Button>
+                  <form
+                    action={`/api/auth/${item.platform}`}
+                    method="post"
+                    onSubmit={() => setConnectingPlatform(item.platform)}
+                  >
+                    <Button type="submit" disabled={connectingPlatform === item.platform}>
+                      {connectingPlatform === item.platform ? "Connecting..." : "Connect"}
+                    </Button>
                   </form>
                 )}
               </div>
@@ -97,9 +153,14 @@ export function SettingsClient() {
             <div>
               <p className="text-sm text-muted">Current plan</p>
               <div className="mt-2">
-                <StatusBadge value={user?.plan ?? "free"} />
+                <StatusBadge value={subscription?.plan ?? user?.plan ?? "free"} />
               </div>
-              <p className="mt-3 text-sm text-muted">Next billing date: Not available</p>
+              <p className="mt-3 text-sm text-muted">Next billing date: {billingDateLabel}</p>
+              {subscription?.cancelAtPeriodEnd && subscription.currentPeriodEnd && (
+                <p className="mt-2 text-sm text-muted">
+                  Cancellation is set for the end of the current billing period.
+                </p>
+              )}
             </div>
             <Button variant="outline" onClick={manageBilling}>
               Manage billing →

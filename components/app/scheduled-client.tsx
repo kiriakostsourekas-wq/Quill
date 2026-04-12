@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { Pencil, RotateCcw, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { PlatformBadge } from "@/components/app/platform-badge";
 import { StatusBadge } from "@/components/app/status-badge";
@@ -44,9 +45,6 @@ async function fetchPosts() {
 export function ScheduledClient() {
   const [posts, setPosts] = useState<PostRecord[]>([]);
   const [activeFilter, setActiveFilter] = useState<(typeof filters)[number]>("all");
-  const [feedback, setFeedback] = useState<{ type: "success" | "error"; message: string } | null>(
-    null
-  );
 
   async function readResponseError(response: Response, fallback: string) {
     try {
@@ -64,10 +62,7 @@ export function ScheduledClient() {
   useEffect(() => {
     loadPosts().catch((error) => {
       setPosts([]);
-      setFeedback({
-        type: "error",
-        message: error instanceof Error ? error.message : "Unable to load posts",
-      });
+      toast.error(error instanceof Error ? error.message : "Unable to load posts");
     });
   }, []);
 
@@ -81,21 +76,16 @@ export function ScheduledClient() {
 
   async function deletePost(id: string) {
     if (!window.confirm("Delete this post?")) return;
-    setFeedback(null);
     const response = await fetch(`/api/posts/${id}`, { method: "DELETE" });
     if (!response.ok) {
-      setFeedback({
-        type: "error",
-        message: await readResponseError(response, "Unable to delete post"),
-      });
+      toast.error(await readResponseError(response, "Unable to delete post"));
       return;
     }
     await loadPosts();
-    setFeedback({ type: "success", message: "Post deleted." });
+    toast.success("Post deleted.");
   }
 
   async function retryPost(post: PostRecord) {
-    setFeedback(null);
     const response = await fetch("/api/publish/now", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -106,14 +96,11 @@ export function ScheduledClient() {
       }),
     });
     if (!response.ok) {
-      setFeedback({
-        type: "error",
-        message: await readResponseError(response, "Unable to retry publishing"),
-      });
+      toast.error(await readResponseError(response, "Unable to retry publishing"));
       return;
     }
     await loadPosts();
-    setFeedback({ type: "success", message: "Retry started." });
+    toast.success("Publish retry started.");
   }
 
   return (
@@ -142,12 +129,6 @@ export function ScheduledClient() {
         ))}
       </div>
 
-      {feedback && (
-        <p className={`text-sm ${feedback.type === "error" ? "text-red-600" : "text-emerald-600"}`}>
-          {feedback.message}
-        </p>
-      )}
-
       <div className="quill-card divide-y divide-line overflow-hidden">
         {visiblePosts.length === 0 ? (
           <div className="flex flex-col items-center px-6 py-16 text-center">
@@ -159,7 +140,7 @@ export function ScheduledClient() {
               Start building your queue and Quill will keep everything organized here.
             </p>
             <Link href="/compose" className="mt-6">
-              <Button>Start composing →</Button>
+              <Button>Compose your first post →</Button>
             </Link>
           </div>
         ) : (

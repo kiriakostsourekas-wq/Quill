@@ -119,7 +119,7 @@ export async function GET(request: NextRequest) {
       },
     });
 
-    const response = NextResponse.redirect(new URL("/settings", request.url), {
+    const response = NextResponse.redirect(new URL("/settings?connected=linkedin", request.url), {
       status: 303,
     });
     appendSessionCookie(response, user.id);

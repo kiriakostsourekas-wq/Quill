@@ -16,12 +16,14 @@ type PostRecord = {
 
 export function DashboardClient() {
   const [posts, setPosts] = useState<PostRecord[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     fetch("/api/posts")
       .then((response) => response.json())
       .then((data) => setPosts(data.posts ?? []))
-      .catch(() => setPosts([]));
+      .catch(() => setPosts([]))
+      .finally(() => setLoading(false));
   }, []);
 
   const metrics = useMemo(
@@ -45,16 +47,23 @@ export function DashboardClient() {
       </div>
 
       <div className="grid gap-4 md:grid-cols-3">
-        {[
-          { label: "Total Published", value: metrics.published },
-          { label: "Scheduled", value: metrics.scheduled },
-          { label: "Draft", value: metrics.draft },
-        ].map((metric) => (
-          <div key={metric.label} className="quill-card p-5">
-            <p className="text-sm text-muted">{metric.label}</p>
-            <p className="mt-3 text-3xl font-semibold text-ink">{metric.value}</p>
-          </div>
-        ))}
+        {loading
+          ? Array.from({ length: 3 }).map((_, index) => (
+              <div key={index} className="quill-card p-5">
+                <div className="h-4 w-24 animate-pulse rounded bg-slate-200" />
+                <div className="mt-4 h-9 w-16 animate-pulse rounded bg-slate-200" />
+              </div>
+            ))
+          : [
+              { label: "Total Published", value: metrics.published },
+              { label: "Scheduled", value: metrics.scheduled },
+              { label: "Draft", value: metrics.draft },
+            ].map((metric) => (
+              <div key={metric.label} className="quill-card p-5">
+                <p className="text-sm text-muted">{metric.label}</p>
+                <p className="mt-3 text-3xl font-semibold text-ink">{metric.value}</p>
+              </div>
+            ))}
       </div>
 
       <div className="quill-card overflow-hidden">
@@ -73,7 +82,24 @@ export function DashboardClient() {
               </tr>
             </thead>
             <tbody className="divide-y divide-line bg-white">
-              {recentPosts.length === 0 && (
+              {loading &&
+                Array.from({ length: 5 }).map((_, index) => (
+                  <tr key={`skeleton-${index}`}>
+                    <td className="px-5 py-4">
+                      <div className="h-4 w-full animate-pulse rounded bg-slate-200" />
+                    </td>
+                    <td className="px-5 py-4">
+                      <div className="h-4 w-24 animate-pulse rounded bg-slate-200" />
+                    </td>
+                    <td className="px-5 py-4">
+                      <div className="h-6 w-20 animate-pulse rounded-full bg-slate-200" />
+                    </td>
+                    <td className="px-5 py-4">
+                      <div className="h-4 w-20 animate-pulse rounded bg-slate-200" />
+                    </td>
+                  </tr>
+                ))}
+              {!loading && recentPosts.length === 0 && (
                 <tr>
                   <td className="px-5 py-8 text-muted" colSpan={4}>
                     No posts yet.

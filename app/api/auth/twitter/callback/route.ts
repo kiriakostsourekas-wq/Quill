@@ -140,7 +140,7 @@ export async function GET(request: NextRequest) {
       },
     });
 
-    const response = NextResponse.redirect(new URL("/settings", request.url), {
+    const response = NextResponse.redirect(new URL("/settings?connected=twitter", request.url), {
       status: 303,
     });
     appendSessionCookie(response, user.id);
@@ -152,4 +152,3 @@ export async function GET(request: NextRequest) {
     return response;
   }
 }
-

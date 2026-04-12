@@ -1,7 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Loader2 } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { splitVoiceSamples } from "@/lib/utils";
 
 type VoiceProfile = {
   traits: string[];
@@ -31,10 +34,7 @@ export function VoiceDnaClient() {
   async function analyzeVoice() {
     setLoading(true);
     try {
-      const samplePosts = rawSamples
-        .split(/\n\s*\n|\n/)
-        .map((sample) => sample.trim())
-        .filter(Boolean);
+      const samplePosts = splitVoiceSamples(rawSamples);
 
       const response = await fetch("/api/voice/analyze", {
         method: "POST",
@@ -42,8 +42,16 @@ export function VoiceDnaClient() {
         body: JSON.stringify({ samplePosts }),
       });
 
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.error ?? "Unable to analyze voice");
+      }
+
       const data = await response.json();
       setProfile(data.profile ?? null);
+      toast.success("Voice analysis complete.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Unable to analyze voice");
     } finally {
       setLoading(false);
     }
@@ -72,6 +80,12 @@ export function VoiceDnaClient() {
         <Button className="mt-5" onClick={analyzeVoice} disabled={loading}>
           {loading ? "Analyzing..." : "Analyze my voice →"}
         </Button>
+        {loading && (
+          <div className="mt-4 flex items-center gap-2 text-sm text-muted">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            <span>Analyzing your voice...</span>
+          </div>
+        )}
       </div>
 
       {profile && (

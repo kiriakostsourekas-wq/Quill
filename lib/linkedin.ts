@@ -5,6 +5,7 @@ import { decrypt, encrypt } from "@/lib/encrypt";
 import { safeJson } from "@/lib/utils";
 
 const LINKEDIN_SCOPES = ["openid", "profile", "email", "w_member_social"];
+const TOKEN_REFRESH_WINDOW_MS = 10 * 60 * 1000;
 
 function baseUrl() {
   return process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
@@ -79,7 +80,7 @@ export async function getFreshLinkedInAccount(account: SocialAccount) {
   const refreshToken = account.refreshToken ? decrypt(account.refreshToken) : null;
   const expiresSoon =
     !!account.expiresAt &&
-    account.expiresAt.getTime() - Date.now() < 5 * 60 * 1000;
+    account.expiresAt.getTime() - Date.now() < TOKEN_REFRESH_WINDOW_MS;
 
   if (!expiresSoon || !refreshToken) {
     return {
@@ -88,24 +89,36 @@ export async function getFreshLinkedInAccount(account: SocialAccount) {
     };
   }
 
-  const refreshed = await refreshLinkedInToken(refreshToken);
-  const updated = await prisma.socialAccount.update({
-    where: { id: account.id },
-    data: {
-      accessToken: encrypt(refreshed.access_token),
-      refreshToken: refreshed.refresh_token
-        ? encrypt(refreshed.refresh_token)
-        : account.refreshToken,
-      expiresAt: refreshed.expires_in
-        ? new Date(Date.now() + refreshed.expires_in * 1000)
-        : account.expiresAt,
-    },
-  });
+  try {
+    const refreshed = await refreshLinkedInToken(refreshToken);
+    const updated = await prisma.socialAccount.update({
+      where: { id: account.id },
+      data: {
+        accessToken: encrypt(refreshed.access_token),
+        refreshToken: refreshed.refresh_token
+          ? encrypt(refreshed.refresh_token)
+          : account.refreshToken,
+        expiresAt: refreshed.expires_in
+          ? new Date(Date.now() + refreshed.expires_in * 1000)
+          : account.expiresAt,
+      },
+    });
 
-  return {
-    accessToken: decrypt(updated.accessToken),
-    account: updated,
-  };
+    return {
+      accessToken: decrypt(updated.accessToken),
+      account: updated,
+    };
+  } catch (error) {
+    console.warn("LinkedIn token refresh failed", {
+      accountId: account.id,
+      error: error instanceof Error ? error.message : "Unknown error",
+    });
+
+    return {
+      accessToken: decrypt(account.accessToken),
+      account,
+    };
+  }
 }
 
 export async function postToLinkedIn(
