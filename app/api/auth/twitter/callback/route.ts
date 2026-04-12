@@ -3,13 +3,15 @@ import { prisma } from "@/lib/prisma";
 import { appendSessionCookie } from "@/lib/session";
 import { exchangeTwitterCode } from "@/lib/twitter";
 import { clearOAuthCookie, readOAuthCookie } from "@/lib/oauth";
-import { TWITTER_OAUTH_COOKIE_NAME } from "@/lib/constants";
+import {
+  TWITTER_OAUTH_COOKIE_NAME,
+  TWITTER_PKCE_VERIFIER_COOKIE_NAME,
+} from "@/lib/constants";
 import { encrypt } from "@/lib/encrypt";
 import { safeJson } from "@/lib/utils";
 
 type TwitterStateCookie = {
   state: string;
-  verifier: string;
   userId: string | null;
   returnTo?: string | null;
 };
@@ -87,21 +89,27 @@ export async function GET(request: NextRequest) {
   const state = request.nextUrl.searchParams.get("state");
   const providerError = request.nextUrl.searchParams.get("error");
   const payload = readOAuthCookie<TwitterStateCookie>(request, TWITTER_OAUTH_COOKIE_NAME);
+  const verifierPayload = readOAuthCookie<{ verifier?: string | null }>(
+    request,
+    TWITTER_PKCE_VERIFIER_COOKIE_NAME
+  );
 
   if (providerError) {
     const response = buildFailureRedirect(request, "/login?error=twitter_denied");
     clearOAuthCookie(response, TWITTER_OAUTH_COOKIE_NAME);
+    clearOAuthCookie(response, TWITTER_PKCE_VERIFIER_COOKIE_NAME);
     return response;
   }
 
-  if (!code || !state || !payload || payload.state !== state) {
+  if (!code || !state || !payload || !verifierPayload?.verifier || payload.state !== state) {
     const response = buildFailureRedirect(request);
     clearOAuthCookie(response, TWITTER_OAUTH_COOKIE_NAME);
+    clearOAuthCookie(response, TWITTER_PKCE_VERIFIER_COOKIE_NAME);
     return response;
   }
 
   try {
-    const tokens = await exchangeTwitterCode(code, payload.verifier);
+    const tokens = await exchangeTwitterCode(code, verifierPayload.verifier);
     const profileResponse = await fetch(
       "https://api.twitter.com/2/users/me?user.fields=profile_image_url,name,username",
       {
@@ -155,11 +163,13 @@ export async function GET(request: NextRequest) {
     const response = NextResponse.redirect(new URL(destination, request.url), { status: 303 });
     appendSessionCookie(response, user.id);
     clearOAuthCookie(response, TWITTER_OAUTH_COOKIE_NAME);
+    clearOAuthCookie(response, TWITTER_PKCE_VERIFIER_COOKIE_NAME);
     return response;
   } catch (error) {
     console.error("Twitter OAuth callback failed", error);
     const response = buildFailureRedirect(request);
     clearOAuthCookie(response, TWITTER_OAUTH_COOKIE_NAME);
+    clearOAuthCookie(response, TWITTER_PKCE_VERIFIER_COOKIE_NAME);
     return response;
   }
 }

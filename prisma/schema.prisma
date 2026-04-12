@@ -65,6 +65,7 @@ model PostDelivery {
   platform     String
   status       String   @default("pending")
   externalPostId String?
+  metadata     Json?
   publishedAt  DateTime?
   errorLog     String?
   attemptCount Int      @default(0)

@@ -24,6 +24,7 @@ export class ImmutablePostError extends Error {
 
 type ProviderPublishResult = {
   externalPostId: string | null;
+  metadata?: Prisma.JsonValue | null;
 };
 
 type PostWithRelations = Prisma.PostGetPayload<{
@@ -285,7 +286,8 @@ async function markAttemptStarted(
 async function markAttemptSucceeded(
   delivery: Pick<PostDelivery, "id">,
   attemptId: string,
-  externalPostId: string | null
+  externalPostId: string | null,
+  metadata?: Prisma.JsonValue | null
 ) {
   await prisma.$transaction(async (tx) => {
     await tx.postDelivery.update({
@@ -293,6 +295,7 @@ async function markAttemptSucceeded(
       data: {
         status: "published",
         externalPostId,
+        metadata: metadata ?? undefined,
         publishedAt: new Date(),
         errorLog: null,
       },
@@ -406,7 +409,12 @@ export async function claimAndPublishPost(
 
     try {
       const result = await publishToPlatform(post, delivery.platform);
-      await markAttemptSucceeded(delivery, attempt.id, result.externalPostId);
+      await markAttemptSucceeded(
+        delivery,
+        attempt.id,
+        result.externalPostId,
+        result.metadata ?? null
+      );
     } catch (error) {
       const message = error instanceof Error ? error.message : "Publishing failed";
       await markAttemptFailed(delivery, attempt.id, message);

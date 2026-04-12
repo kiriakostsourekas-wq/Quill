@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from "crypto";
-import type { SocialAccount } from "@prisma/client";
+import type { Prisma, SocialAccount } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { decrypt, encrypt } from "@/lib/encrypt";
 import { safeJson } from "@/lib/utils";
@@ -38,11 +38,9 @@ export function createTwitterPkcePair() {
   return { verifier, challenge };
 }
 
-export function getTwitterAuthUrl(
-  state = randomBytes(16).toString("hex"),
-  challenge = ""
-) {
+export function getTwitterAuthUrl(state = randomBytes(16).toString("hex")) {
   assertTwitterAuthConfig();
+  const { verifier, challenge } = createTwitterPkcePair();
   const url = new URL("https://twitter.com/i/oauth2/authorize");
   url.searchParams.set("response_type", "code");
   url.searchParams.set("client_id", process.env.TWITTER_CLIENT_ID ?? "");
@@ -51,7 +49,10 @@ export function getTwitterAuthUrl(
   url.searchParams.set("state", state);
   url.searchParams.set("code_challenge", challenge);
   url.searchParams.set("code_challenge_method", "S256");
-  return url.toString();
+  return {
+    url: url.toString(),
+    verifier,
+  };
 }
 
 export async function exchangeTwitterCode(code: string, verifier: string) {
@@ -171,14 +172,97 @@ export async function getFreshTwitterAccount(account: SocialAccount) {
   }
 }
 
-export async function postTweet(accessToken: string, text: string) {
+function splitLongSentence(sentence: string, limit: number) {
+  const words = sentence.split(/\s+/).filter(Boolean);
+  const chunks: string[] = [];
+  let current = "";
+
+  for (const word of words) {
+    const next = current ? `${current} ${word}` : word;
+    if (next.length <= limit) {
+      current = next;
+      continue;
+    }
+
+    if (current) {
+      chunks.push(current);
+    }
+    current = word;
+  }
+
+  if (current) {
+    chunks.push(current);
+  }
+
+  return chunks;
+}
+
+function splitIntoThread(text: string, limit = 280) {
+  if (text.length <= limit) {
+    return [text];
+  }
+
+  const sentences = Array.from(text.matchAll(/[^.!?\n]+(?:[.!?]+|$)/g))
+    .map((match) => (match[0] ?? "").trim())
+    .filter(Boolean);
+
+  const source = sentences.length > 0 ? sentences : [text];
+  const chunks: string[] = [];
+  let current = "";
+
+  for (const sentence of source) {
+    const next = current ? `${current} ${sentence}` : sentence;
+    if (next.length <= limit) {
+      current = next;
+      continue;
+    }
+
+    if (current) {
+      chunks.push(current);
+      current = "";
+    }
+
+    if (sentence.length <= limit) {
+      current = sentence;
+      continue;
+    }
+
+    const longChunks = splitLongSentence(sentence, limit);
+    for (const longChunk of longChunks) {
+      if (longChunk.length <= limit) {
+        chunks.push(longChunk);
+      }
+    }
+  }
+
+  if (current) {
+    chunks.push(current);
+  }
+
+  return chunks.filter(Boolean);
+}
+
+async function createTweet(
+  accessToken: string,
+  text: string,
+  inReplyToTweetId?: string
+) {
   const response = await fetch("https://api.twitter.com/2/tweets", {
     method: "POST",
     headers: {
       Authorization: `Bearer ${accessToken}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ text }),
+    body: JSON.stringify({
+      text,
+      ...(inReplyToTweetId
+        ? {
+            reply: {
+              in_reply_to_tweet_id: inReplyToTweetId,
+            },
+          }
+        : {}),
+    }),
   });
 
   if (!response.ok) {
@@ -189,7 +273,34 @@ export async function postTweet(accessToken: string, text: string) {
   }
 
   const result = await safeJson<{ data?: { id?: string } }>(response);
+  if (!result.data?.id) {
+    throw new Error("Twitter publish failed: response did not include a tweet id");
+  }
+
+  return result.data.id;
+}
+
+export async function postTweet(
+  accessToken: string,
+  text: string
+): Promise<{ externalPostId: string | null; metadata: Prisma.JsonObject }> {
+  const chunks = splitIntoThread(text);
+  const tweetIds: string[] = [];
+  let previousTweetId: string | undefined;
+
+  for (const chunk of chunks) {
+    const tweetId = await createTweet(accessToken, chunk, previousTweetId);
+    if (tweetId) {
+      tweetIds.push(tweetId);
+      previousTweetId = tweetId;
+    }
+  }
+
   return {
-    externalPostId: result.data?.id ?? null,
+    externalPostId: tweetIds[0] ?? null,
+    metadata: {
+      tweetIds,
+      threaded: tweetIds.length > 1,
+    },
   };
 }

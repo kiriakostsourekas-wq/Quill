@@ -186,8 +186,7 @@ export function ComposeClient() {
 
   const countLabel = useMemo(() => {
     if (platform === "linkedin") return `${content.length} / 3000`;
-    if (platform === "twitter") return `${content.length} / 280`;
-    return `${content.length} / 3000 LinkedIn • 280 X`;
+    return `${content.length} / 280`;
   }, [content.length, platform]);
 
   const selectedPlatforms = useMemo(() => {
