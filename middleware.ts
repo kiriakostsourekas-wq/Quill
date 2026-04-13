@@ -1,10 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
-import { ONBOARDING_COOKIE_NAME, SESSION_COOKIE_NAME } from "@/lib/constants";
+import {
+  ONBOARDING_COOKIE_NAME,
+  ROLE_COOKIE_NAME,
+  SESSION_COOKIE_NAME,
+} from "@/lib/constants";
 
 export function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
   const sessionCookie = request.cookies.get(SESSION_COOKIE_NAME)?.value;
   const onboardingCookie = request.cookies.get(ONBOARDING_COOKIE_NAME)?.value;
+  const roleCookie = request.cookies.get(ROLE_COOKIE_NAME)?.value;
   const onboardingCompleted = onboardingCookie === "completed";
   const isOnboardingPath = pathname.startsWith("/onboarding");
 
@@ -18,6 +23,10 @@ export function middleware(request: NextRequest) {
 
   if (!isOnboardingPath && !onboardingCompleted) {
     return NextResponse.redirect(new URL("/onboarding", request.url));
+  }
+
+  if (roleCookie === "admin") {
+    return NextResponse.next();
   }
 
   return NextResponse.next();

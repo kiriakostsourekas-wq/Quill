@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireRequestUser } from "@/lib/auth";
 import { sendWelcomeEmail } from "@/lib/email";
 import { prisma } from "@/lib/prisma";
-import { appendOnboardingCookie, appendSessionCookie } from "@/lib/session";
+import { appendOnboardingCookie, appendRoleCookie, appendSessionCookie } from "@/lib/session";
 
 const onboardingSchema = z.object({
   useCase: z.string().trim().min(1, "Choose what brings you to Quill"),
@@ -72,8 +72,9 @@ export async function POST(request: NextRequest) {
     }
 
     const response = NextResponse.json({ success: true });
-    appendSessionCookie(response, updatedUser.id, true);
+    appendSessionCookie(response, updatedUser.id, true, updatedUser.role);
     appendOnboardingCookie(response, true);
+    appendRoleCookie(response, updatedUser.role);
     return response;
   } catch (error) {
     if (

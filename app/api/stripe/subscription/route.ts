@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireRequestUser } from "@/lib/auth";
+import { getEffectivePlan, isAdminUser, requireRequestUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { stripe } from "@/lib/stripe";
 
@@ -21,6 +21,7 @@ export async function GET(request: NextRequest) {
     where: { id: user.id },
     select: {
       plan: true,
+      role: true,
       stripeCustomerId: true,
     },
   });
@@ -29,9 +30,18 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "User not found" }, { status: 404 });
   }
 
+  if (isAdminUser(freshUser)) {
+    return NextResponse.json({
+      plan: "pro",
+      status: "admin",
+      currentPeriodEnd: null,
+      cancelAtPeriodEnd: false,
+    });
+  }
+
   if (!freshUser.stripeCustomerId) {
     return NextResponse.json({
-      plan: freshUser.plan,
+      plan: getEffectivePlan(freshUser),
       status: null,
       currentPeriodEnd: null,
       cancelAtPeriodEnd: false,
@@ -52,7 +62,7 @@ export async function GET(request: NextRequest) {
 
   if (!subscription) {
     return NextResponse.json({
-      plan: freshUser.plan,
+      plan: getEffectivePlan(freshUser),
       status: null,
       currentPeriodEnd: null,
       cancelAtPeriodEnd: false,
@@ -67,7 +77,10 @@ export async function GET(request: NextRequest) {
       .find((value): value is number => typeof value === "number") ?? null;
 
   return NextResponse.json({
-    plan: typeof lookupKey === "string" && lookupKey.length > 0 ? lookupKey : freshUser.plan,
+    plan:
+      typeof lookupKey === "string" && lookupKey.length > 0
+        ? lookupKey
+        : getEffectivePlan(freshUser),
     status: subscription.status,
     currentPeriodEnd: currentPeriodEnd ? new Date(currentPeriodEnd * 1000).toISOString() : null,
     cancelAtPeriodEnd: subscription.cancel_at_period_end,

@@ -1,11 +1,16 @@
 import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
-import { ONBOARDING_COOKIE_NAME, SESSION_COOKIE_NAME } from "@/lib/constants";
+import {
+  ONBOARDING_COOKIE_NAME,
+  ROLE_COOKIE_NAME,
+  SESSION_COOKIE_NAME,
+} from "@/lib/constants";
 import { decrypt, encrypt } from "@/lib/encrypt";
 
 type SessionPayload = {
   userId: string;
   onboardingCompleted: boolean;
+  role: string;
 };
 
 function encodeSession(payload: SessionPayload) {
@@ -24,11 +29,12 @@ function decodeSession(value: string): SessionPayload | null {
 export function appendSessionCookie(
   response: NextResponse,
   userId: string,
-  onboardingCompleted = false
+  onboardingCompleted = false,
+  role = "user"
 ) {
   response.cookies.set({
     name: SESSION_COOKIE_NAME,
-    value: encodeSession({ userId, onboardingCompleted }),
+    value: encodeSession({ userId, onboardingCompleted, role }),
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
@@ -40,6 +46,27 @@ export function appendSessionCookie(
 export function clearSessionCookie(response: NextResponse) {
   response.cookies.set({
     name: SESSION_COOKIE_NAME,
+    value: "",
+    path: "/",
+    maxAge: 0,
+  });
+}
+
+export function appendRoleCookie(response: NextResponse, role: string) {
+  response.cookies.set({
+    name: ROLE_COOKIE_NAME,
+    value: role,
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    path: "/",
+    maxAge: 60 * 60 * 24 * 30,
+  });
+}
+
+export function clearRoleCookie(response: NextResponse) {
+  response.cookies.set({
+    name: ROLE_COOKIE_NAME,
     value: "",
     path: "/",
     maxAge: 0,

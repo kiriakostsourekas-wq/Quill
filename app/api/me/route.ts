@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { NextRequest, NextResponse } from "next/server";
-import { requireRequestUser } from "@/lib/auth";
+import { getEffectivePlan, requireRequestUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
 const updateMeSchema = z.object({
@@ -19,7 +19,8 @@ export async function GET(request: NextRequest) {
       email: user.email,
       name: user.name,
       avatar: user.avatar,
-      plan: user.plan,
+      plan: getEffectivePlan(user),
+      role: user.role,
       voiceProfile: user.voiceProfile,
     },
   });
@@ -55,9 +56,9 @@ export async function PATCH(request: NextRequest) {
       email: updatedUser.email,
       name: updatedUser.name,
       avatar: updatedUser.avatar,
-      plan: updatedUser.plan,
+      plan: getEffectivePlan(updatedUser),
+      role: updatedUser.role,
       voiceProfile: updatedUser.voiceProfile,
     },
   });
 }
-

@@ -238,7 +238,7 @@ export default async function HomePage() {
             <span className="h-3 w-3 rounded-full bg-red-400" />
             <span className="h-3 w-3 rounded-full bg-yellow-400" />
             <span className="h-3 w-3 rounded-full bg-green-400" />
-            <span className="ml-4 text-xs text-muted">quill-ai-tool.vercel.app</span>
+            <span className="ml-4 text-xs text-muted">quill-ai.dev</span>
           </div>
 
           <div className="grid gap-0 lg:grid-cols-[1.5fr_1fr]">

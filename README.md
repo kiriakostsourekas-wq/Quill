@@ -53,7 +53,7 @@ npm run build
 2. Add all environment variables from `.env.example`.
 3. Set `CRON_SECRET` in Vercel. Vercel Cron will send it automatically as `Authorization: Bearer <CRON_SECRET>` when calling `/api/cron/publish`.
 4. Set `RESEND_API_KEY` and `RESEND_FROM_EMAIL` in Vercel if you want onboarding welcome emails enabled.
-5. Ensure `NEXT_PUBLIC_APP_URL` matches the deployed product app domain.
+5. Ensure `NEXT_PUBLIC_APP_URL` matches the deployed product app domain, e.g. `https://quill-ai.dev`.
 
 Vercel Cron is currently disabled in `vercel.json` so the project deploys cleanly on the Vercel Hobby plan.
 

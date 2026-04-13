@@ -2,6 +2,19 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentSessionUserId, getSessionUserIdFromRequest } from "@/lib/session";
 
+type UserAccessShape = {
+  plan: string;
+  role: string;
+};
+
+export function isAdminUser(user: UserAccessShape) {
+  return user.role === "admin";
+}
+
+export function getEffectivePlan(user: UserAccessShape) {
+  return isAdminUser(user) ? "pro" : user.plan;
+}
+
 export async function getCurrentUser() {
   const userId = getCurrentSessionUserId();
   if (!userId) return null;

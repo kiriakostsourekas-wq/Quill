@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireRequestUser } from "@/lib/auth";
+import { isAdminUser, requireRequestUser } from "@/lib/auth";
 import { ensureStripeCustomer, stripe } from "@/lib/stripe";
 import { absoluteAppUrl } from "@/lib/utils";
 
@@ -7,6 +7,13 @@ export async function POST(request: NextRequest) {
   const user = await requireRequestUser(request);
   if (user instanceof NextResponse) {
     return user;
+  }
+
+  if (isAdminUser(user)) {
+    return NextResponse.json(
+      { error: "Admin accounts do not use Stripe billing" },
+      { status: 403 }
+    );
   }
 
   const customerId = await ensureStripeCustomer(user);
@@ -17,4 +24,3 @@ export async function POST(request: NextRequest) {
 
   return NextResponse.json({ url: session.url });
 }
-

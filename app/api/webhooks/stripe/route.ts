@@ -13,6 +13,12 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
   if (!plan) return;
 
   if (userId) {
+    const currentUser = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { role: true },
+    });
+    if (currentUser?.role === "admin") return;
+
     await prisma.user.update({
       where: { id: userId },
       data: {
@@ -25,7 +31,7 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
 
   if (customerId) {
     await prisma.user.updateMany({
-      where: { stripeCustomerId: customerId },
+      where: { stripeCustomerId: customerId, role: { not: "admin" } },
       data: { plan },
     });
   }
@@ -38,7 +44,7 @@ async function handleSubscriptionDeleted(subscription: Stripe.Subscription) {
   if (!customerId) return;
 
   await prisma.user.updateMany({
-    where: { stripeCustomerId: customerId },
+    where: { stripeCustomerId: customerId, role: { not: "admin" } },
     data: { plan: "free" },
   });
 }
@@ -78,4 +84,3 @@ export async function POST(request: NextRequest) {
 
   return NextResponse.json({ received: true });
 }
-

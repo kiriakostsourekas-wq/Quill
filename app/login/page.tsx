@@ -71,7 +71,7 @@ export default async function LoginPage({
           and{" "}
           <a
             className="text-brand hover:underline"
-            href="https://quill-ai-tool.vercel.app/privacy-policy"
+            href="https://quill-ai.dev/privacy-policy"
             target="_blank"
             rel="noreferrer"
           >

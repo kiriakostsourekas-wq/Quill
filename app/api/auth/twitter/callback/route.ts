@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { appendOnboardingCookie, appendSessionCookie } from "@/lib/session";
+import { appendOnboardingCookie, appendRoleCookie, appendSessionCookie } from "@/lib/session";
 import { exchangeTwitterCode } from "@/lib/twitter";
 import { clearOAuthCookie, readOAuthCookie } from "@/lib/oauth";
 import {
@@ -162,8 +162,9 @@ export async function GET(request: NextRequest) {
         ? payload.returnTo
         : "/settings?connected=twitter";
     const response = NextResponse.redirect(new URL(destination, request.url), { status: 303 });
-    appendSessionCookie(response, user.id, user.onboardingCompleted);
+    appendSessionCookie(response, user.id, user.onboardingCompleted, user.role);
     appendOnboardingCookie(response, user.onboardingCompleted);
+    appendRoleCookie(response, user.role);
     clearOAuthCookie(response, TWITTER_OAUTH_COOKIE_NAME);
     clearOAuthCookie(response, TWITTER_PKCE_VERIFIER_COOKIE_NAME);
     return response;

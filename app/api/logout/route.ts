@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { clearOnboardingCookie, clearSessionCookie } from "@/lib/session";
+import { clearOnboardingCookie, clearRoleCookie, clearSessionCookie } from "@/lib/session";
 
 export async function POST(request: Request) {
   const response = NextResponse.redirect(new URL("/login", request.url), {
@@ -8,5 +8,6 @@ export async function POST(request: Request) {
 
   clearSessionCookie(response);
   clearOnboardingCookie(response);
+  clearRoleCookie(response);
   return response;
 }
