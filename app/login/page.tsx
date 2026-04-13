@@ -22,7 +22,7 @@ export default async function LoginPage({
   searchParams?: { error?: string };
 }) {
   const user = await getCurrentUser();
-  if (user) redirect("/dashboard");
+  if (user) redirect(user.onboardingCompleted ? "/dashboard" : "/onboarding");
 
   const errorMessage = searchParams?.error ? errorMessages[searchParams.error] : null;
 

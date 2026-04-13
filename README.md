@@ -10,6 +10,7 @@ Quill is a Next.js 14 SaaS application for voice-aware social publishing. Users 
 - Prisma + Supabase Postgres
 - Groq for Voice DNA analysis and rewrite flows
 - Stripe for billing
+- Resend for onboarding welcome email
 - Vercel Cron Jobs for scheduled publishing
 
 ## Local Development
@@ -30,6 +31,7 @@ Important:
 
 - `DATABASE_URL` should use the Supabase Session Pooler connection string.
 - `CRON_SECRET` is required for Vercel Cron auth.
+- `RESEND_API_KEY` and `RESEND_FROM_EMAIL` are required for onboarding welcome emails.
 - Generate `CRON_SECRET` with:
 
 ```bash
@@ -50,7 +52,8 @@ npm run build
 1. Import the repository as a Next.js project.
 2. Add all environment variables from `.env.example`.
 3. Set `CRON_SECRET` in Vercel. Vercel Cron will send it automatically as `Authorization: Bearer <CRON_SECRET>` when calling `/api/cron/publish`.
-4. Ensure `NEXT_PUBLIC_APP_URL` matches the deployed product app domain.
+4. Set `RESEND_API_KEY` and `RESEND_FROM_EMAIL` in Vercel if you want onboarding welcome emails enabled.
+5. Ensure `NEXT_PUBLIC_APP_URL` matches the deployed product app domain.
 
 Vercel Cron is currently disabled in `vercel.json` so the project deploys cleanly on the Vercel Hobby plan.
 

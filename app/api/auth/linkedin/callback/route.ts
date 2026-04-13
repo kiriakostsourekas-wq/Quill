@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { appendSessionCookie } from "@/lib/session";
+import { appendOnboardingCookie, appendSessionCookie } from "@/lib/session";
 import { exchangeLinkedInCode } from "@/lib/linkedin";
 import { appendOAuthCookie, clearOAuthCookie, readOAuthCookie } from "@/lib/oauth";
 import { LINKEDIN_OAUTH_COOKIE_NAME } from "@/lib/constants";
@@ -127,12 +127,14 @@ export async function GET(request: NextRequest) {
       },
     });
 
-    const destination =
-      payload.returnTo && payload.returnTo.startsWith("/")
+    const destination = !user.onboardingCompleted
+      ? "/onboarding"
+      : payload.returnTo && payload.returnTo.startsWith("/")
         ? payload.returnTo
         : "/settings?connected=linkedin";
     const response = NextResponse.redirect(new URL(destination, request.url), { status: 303 });
-    appendSessionCookie(response, user.id);
+    appendSessionCookie(response, user.id, user.onboardingCompleted);
+    appendOnboardingCookie(response, user.onboardingCompleted);
     clearOAuthCookie(response, LINKEDIN_OAUTH_COOKIE_NAME);
     return response;
   } catch (error) {

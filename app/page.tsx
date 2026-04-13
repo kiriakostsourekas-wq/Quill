@@ -167,7 +167,7 @@ function StartButtons({ centered = false }: { centered?: boolean }) {
 export default async function HomePage() {
   const user = await getCurrentUser();
   if (user) {
-    redirect("/dashboard");
+    redirect(user.onboardingCompleted ? "/dashboard" : "/onboarding");
   }
 
   return (

@@ -13,6 +13,10 @@ export default async function ProtectedLayout({
     redirect("/login");
   }
 
+  if (!user.onboardingCompleted) {
+    redirect("/onboarding");
+  }
+
   return (
     <AppShell
       user={{

@@ -1,7 +1,9 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { PlatformBadge } from "@/components/app/platform-badge";
 import { StatusBadge } from "@/components/app/status-badge";
@@ -15,6 +17,8 @@ type PostRecord = {
 };
 
 export function DashboardClient() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [posts, setPosts] = useState<PostRecord[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -25,6 +29,13 @@ export function DashboardClient() {
       .catch(() => setPosts([]))
       .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => {
+    if (searchParams.get("welcome") !== "onboarding") return;
+
+    toast.success("Welcome to Quill! Start by training your Voice DNA →");
+    router.replace("/dashboard");
+  }, [router, searchParams]);
 
   const metrics = useMemo(
     () => ({
