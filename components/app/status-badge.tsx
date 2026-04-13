@@ -9,6 +9,7 @@ const badgeStyles: Record<string, string> = {
   free: "bg-slate-100 text-slate-700",
   solo: "bg-brand-light text-brand",
   pro: "bg-emerald-50 text-emerald-700",
+  admin: "bg-brand-light text-brand",
 };
 
 export function StatusBadge({ value }: { value: string }) {

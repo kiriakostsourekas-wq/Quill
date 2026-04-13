@@ -32,7 +32,7 @@ export async function GET(request: NextRequest) {
 
   if (isAdminUser(freshUser)) {
     return NextResponse.json({
-      plan: "pro",
+      plan: "admin",
       status: "admin",
       currentPeriodEnd: null,
       cancelAtPeriodEnd: false,

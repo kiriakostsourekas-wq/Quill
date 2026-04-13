@@ -31,7 +31,8 @@ Important:
 
 - `DATABASE_URL` should use the Supabase Session Pooler connection string.
 - `CRON_SECRET` is required for Vercel Cron auth.
-- `RESEND_API_KEY` and `RESEND_FROM_EMAIL` are required for onboarding welcome emails.
+- `RESEND_API_KEY` is required for onboarding welcome emails.
+- `STRIPE_SOLO_PRICE_ID` and `STRIPE_PRO_PRICE_ID` come from Stripe Dashboard -> Product catalog -> each product's Price ID.
 - Generate `CRON_SECRET` with:
 
 ```bash
@@ -52,7 +53,7 @@ npm run build
 1. Import the repository as a Next.js project.
 2. Add all environment variables from `.env.example`.
 3. Set `CRON_SECRET` in Vercel. Vercel Cron will send it automatically as `Authorization: Bearer <CRON_SECRET>` when calling `/api/cron/publish`.
-4. Set `RESEND_API_KEY` and `RESEND_FROM_EMAIL` in Vercel if you want onboarding welcome emails enabled.
+4. Set `RESEND_API_KEY`, `STRIPE_SOLO_PRICE_ID`, and `STRIPE_PRO_PRICE_ID` in Vercel.
 5. Ensure `NEXT_PUBLIC_APP_URL` matches the deployed product app domain, e.g. `https://quill-ai.dev`.
 
 Vercel Cron is currently disabled in `vercel.json` so the project deploys cleanly on the Vercel Hobby plan.

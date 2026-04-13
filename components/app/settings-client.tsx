@@ -17,6 +17,7 @@ type UserState = {
   name: string | null;
   avatar: string | null;
   plan: string;
+  role: string;
 };
 
 type SubscriptionState = {
@@ -102,10 +103,14 @@ export function SettingsClient() {
 
   const linkedIn = accounts.find((account) => account.platform === "linkedin");
   const twitter = accounts.find((account) => account.platform === "twitter");
+  const isAdminAccount = user?.role === "admin" || subscription?.plan === "admin";
+  const displayedPlan = isAdminAccount ? "admin" : subscription?.plan ?? user?.plan ?? "free";
 
-  const billingDateLabel = subscription?.currentPeriodEnd
-    ? format(new Date(subscription.currentPeriodEnd), "PPP")
-    : "Not available";
+  const billingDateLabel = isAdminAccount
+    ? "Admin account — no billing"
+    : subscription?.currentPeriodEnd
+      ? format(new Date(subscription.currentPeriodEnd), "PPP")
+      : "Not available";
 
   return (
     <section className="space-y-8">
@@ -153,7 +158,7 @@ export function SettingsClient() {
             <div>
               <p className="text-sm text-muted">Current plan</p>
               <div className="mt-2">
-                <StatusBadge value={subscription?.plan ?? user?.plan ?? "free"} />
+                <StatusBadge value={displayedPlan} />
               </div>
               <p className="mt-3 text-sm text-muted">Next billing date: {billingDateLabel}</p>
               {subscription?.cancelAtPeriodEnd && subscription.currentPeriodEnd && (

@@ -31,18 +31,14 @@ export async function ensureStripeCustomer(user: {
 }
 
 export async function getStripePriceId(plan: "solo" | "pro") {
-  const prices = await stripe.prices.list({
-    lookup_keys: [plan],
-    active: true,
-    limit: 1,
-  });
+  const priceId =
+    plan === "solo" ? process.env.STRIPE_SOLO_PRICE_ID : process.env.STRIPE_PRO_PRICE_ID;
 
-  const price = prices.data[0];
-  if (!price) {
-    throw new Error(`No active Stripe price found for lookup key "${plan}"`);
+  if (!priceId) {
+    throw new Error(`Missing Stripe price ID for "${plan}"`);
   }
 
-  return price.id;
+  return priceId;
 }
 
 export function getCheckoutUrls() {
@@ -51,4 +47,3 @@ export function getCheckoutUrls() {
     cancelUrl: absoluteAppUrl("/settings?checkout=cancelled"),
   };
 }
-
