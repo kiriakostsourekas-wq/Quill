@@ -15,6 +15,12 @@ const publishNowSchema = z.object({
   postId: z.string().optional(),
   content: z.string().trim().min(1),
   platforms: z.array(z.enum(["linkedin", "twitter"])).min(1).max(2),
+  firstComment: z
+    .string()
+    .trim()
+    .max(1250, "First comment must be 1250 characters or less")
+    .nullable()
+    .optional(),
 });
 
 function normalizedPlatforms(platforms: string[]) {
@@ -36,6 +42,9 @@ export async function POST(request: NextRequest) {
   }
 
   let postId = parsed.data.postId;
+  const nextFirstComment = parsed.data.platforms.includes("linkedin")
+    ? parsed.data.firstComment?.trim() || null
+    : null;
   const { result } = await scoreVoiceTextForUser(user.id, parsed.data.content);
 
   if (postId) {
@@ -58,6 +67,7 @@ export async function POST(request: NextRequest) {
     const platformsChanged =
       JSON.stringify(normalizedPlatforms(existing.platforms)) !==
       JSON.stringify(normalizedPlatforms(parsed.data.platforms));
+    const firstCommentChanged = (existing.firstComment ?? "") !== (nextFirstComment ?? "");
 
     if (existing.status === "publishing") {
       return NextResponse.json(
@@ -73,7 +83,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (publishedDeliveryExists && (contentChanged || platformsChanged)) {
+    if (publishedDeliveryExists && (contentChanged || platformsChanged || firstCommentChanged)) {
       return NextResponse.json(
         { error: "Partially published posts cannot be changed" },
         { status: 409 }
@@ -84,6 +94,7 @@ export async function POST(request: NextRequest) {
       where: { id: existing.id },
       data: {
         content: contentChanged ? parsed.data.content : existing.content,
+        firstComment: firstCommentChanged ? nextFirstComment : existing.firstComment,
         platforms: platformsChanged ? [...new Set(parsed.data.platforms)] : existing.platforms,
         scheduledAt: null,
         status: publishedDeliveryExists ? existing.status : "draft",
@@ -102,6 +113,7 @@ export async function POST(request: NextRequest) {
       data: {
         userId: user.id,
         content: parsed.data.content,
+        firstComment: nextFirstComment,
         platforms: [...new Set(parsed.data.platforms)],
         status: "draft",
         ...toStoredVoiceFields(result),

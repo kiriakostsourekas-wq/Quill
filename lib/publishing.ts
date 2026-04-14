@@ -1,7 +1,7 @@
 import { randomUUID } from "crypto";
 import type { Post, PostDelivery, Prisma, SocialAccount } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { getFreshLinkedInAccount, postToLinkedIn } from "@/lib/linkedin";
+import { getFreshLinkedInAccount, postLinkedInComment, postToLinkedIn } from "@/lib/linkedin";
 import { getFreshTwitterAccount, postTweet } from "@/lib/twitter";
 
 export const PUBLISH_LEASE_MS = 5 * 60 * 1000;
@@ -132,6 +132,10 @@ function getSocialAccount(accounts: SocialAccount[], platform: "linkedin" | "twi
   return account;
 }
 
+function delay(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 async function publishToPlatform(
   post: PostWithRelations,
   platform: string
@@ -154,6 +158,23 @@ async function publishToPlatform(
   }
 
   throw new Error(`Unsupported platform: ${platform}`);
+}
+
+async function maybePostFirstLinkedInComment(post: PostWithRelations, postUrn: string | null) {
+  const firstComment = post.firstComment?.trim();
+  if (!firstComment || !postUrn) return;
+
+  try {
+    await delay(2000);
+    const account = getSocialAccount(post.user.socialAccounts, "linkedin");
+    const { accessToken } = await getFreshLinkedInAccount(account);
+    await postLinkedInComment(accessToken, postUrn, firstComment);
+  } catch (error) {
+    console.warn("LinkedIn first comment failed", {
+      postId: post.id,
+      error: error instanceof Error ? error.message : "Unknown error",
+    });
+  }
 }
 
 async function claimPostForPublishing(
@@ -415,6 +436,9 @@ export async function claimAndPublishPost(
         result.externalPostId,
         result.metadata ?? null
       );
+      if (delivery.platform === "linkedin") {
+        await maybePostFirstLinkedInComment(post, result.externalPostId);
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : "Publishing failed";
       await markAttemptFailed(delivery, attempt.id, message);

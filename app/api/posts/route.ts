@@ -11,11 +11,17 @@ const scheduledAtSchema = z
   .trim()
   .min(1)
   .refine((value) => !Number.isNaN(new Date(value).getTime()), "Invalid scheduled date");
+const firstCommentSchema = z
+  .string()
+  .trim()
+  .max(1250, "First comment must be 1250 characters or less")
+  .optional();
 
 const createPostSchema = z.object({
   content: z.string().trim().min(1, "Content is required"),
   platforms: z.array(platformSchema).min(1).max(2),
   scheduledAt: scheduledAtSchema.optional(),
+  firstComment: firstCommentSchema.nullable().optional(),
 });
 
 export async function GET(request: NextRequest) {
@@ -65,12 +71,16 @@ export async function POST(request: NextRequest) {
 
   const scheduledAt = parsed.data.scheduledAt ? new Date(parsed.data.scheduledAt) : null;
   const status = scheduledAt ? "scheduled" : "draft";
+  const firstComment = parsed.data.platforms.includes("linkedin")
+    ? parsed.data.firstComment?.trim() || null
+    : null;
   const { result } = await scoreVoiceTextForUser(user.id, parsed.data.content);
 
   const post = await prisma.post.create({
     data: {
       userId: user.id,
       content: parsed.data.content,
+      firstComment,
       platforms: [...new Set(parsed.data.platforms)],
       scheduledAt,
       status,

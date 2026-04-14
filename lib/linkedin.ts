@@ -175,13 +175,101 @@ export async function postToLinkedIn(
     );
   }
 
-  const body = (await response.text()).trim();
-  const externalPostId =
-    response.headers.get("x-restli-id") ??
-    response.headers.get("location") ??
-    (body || null);
+  const rawBody = (await response.text()).trim();
+  const externalPostId = extractLinkedInPostUrn(response, rawBody);
 
   return {
     externalPostId,
   };
+}
+
+function extractLinkedInPostUrn(response: Response, rawBody: string) {
+  const candidates = [
+    response.headers.get("x-linkedin-id"),
+    response.headers.get("x-restli-id"),
+    response.headers.get("location"),
+    rawBody,
+  ].filter((value): value is string => Boolean(value));
+
+  for (const candidate of candidates) {
+    const urn = normalizeLinkedInPostUrn(candidate);
+    if (urn) {
+      return urn;
+    }
+  }
+
+  return null;
+}
+
+function normalizeLinkedInPostUrn(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+
+  try {
+    const parsedJson = JSON.parse(trimmed) as { id?: string };
+    if (parsedJson.id) {
+      return normalizeLinkedInPostUrn(parsedJson.id);
+    }
+  } catch {
+    // ignore non-JSON body values
+  }
+
+  try {
+    const decoded = decodeURIComponent(trimmed);
+    const decodedUrn = decoded.match(/urn:li:[A-Za-z]+:\d+/);
+    if (decodedUrn) return decodedUrn[0];
+  } catch {
+    // ignore invalid URI components
+  }
+
+  const directUrn = trimmed.match(/urn:li:[A-Za-z]+:\d+/);
+  if (directUrn) return directUrn[0];
+
+  return null;
+}
+
+export async function postLinkedInComment(
+  accessToken: string,
+  postUrn: string,
+  text: string
+): Promise<void> {
+  const profileResponse = await fetch("https://api.linkedin.com/v2/userinfo", {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+    cache: "no-store",
+  });
+
+  if (!profileResponse.ok) {
+    const details = await profileResponse.text();
+    throw new Error(
+      `LinkedIn comment actor lookup failed (${profileResponse.status}): ${details || "no response body"}`
+    );
+  }
+
+  const profile = await safeJson<{ sub?: string }>(profileResponse);
+  if (!profile.sub) {
+    throw new Error("LinkedIn comment actor ID is missing");
+  }
+
+  const response = await fetch(
+    `https://api.linkedin.com/v2/socialActions/${encodeURIComponent(postUrn)}/comments`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+        "X-Restli-Protocol-Version": "2.0.0",
+      },
+      body: JSON.stringify({
+        actor: `urn:li:person:${profile.sub}`,
+        message: { text },
+      }),
+    }
+  );
+
+  if (!response.ok) {
+    const err = await response.text();
+    throw new Error(`LinkedIn comment failed: ${err}`);
+  }
 }

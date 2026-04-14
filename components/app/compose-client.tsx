@@ -98,6 +98,8 @@ export function ComposeClient() {
   const [publishing, setPublishing] = useState(false);
   const [scheduleOpen, setScheduleOpen] = useState(false);
   const [scheduledAt, setScheduledAt] = useState("");
+  const [firstComment, setFirstComment] = useState("");
+  const [firstCommentOpen, setFirstCommentOpen] = useState(false);
   const [rewriteLoading, setRewriteLoading] = useState(false);
   const debounceRef = useRef<NodeJS.Timeout | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
@@ -121,6 +123,8 @@ export function ComposeClient() {
         const post = (data.posts ?? []).find((item: { id: string }) => item.id === postId);
         if (!post) return;
         setContent(post.content ?? "");
+        setFirstComment(post.firstComment ?? "");
+        setFirstCommentOpen(Boolean(post.firstComment));
         if (post.scheduledAt) {
           setScheduledAt(new Date(post.scheduledAt).toISOString().slice(0, 16));
         }
@@ -193,6 +197,7 @@ export function ComposeClient() {
     if (platform === "both") return ["linkedin", "twitter"];
     return [platform];
   }, [platform]);
+  const supportsFirstComment = selectedPlatforms.includes("linkedin");
 
   const showVoiceProfile = Boolean(voice.traits && voice.traits.length > 0);
   const shouldHighlightWeakest =
@@ -205,6 +210,7 @@ export function ComposeClient() {
   async function saveOrUpdatePost(payload: {
     content: string;
     platforms: string[];
+    firstComment?: string | null;
     scheduledAt?: string | null;
     status?: "draft" | "scheduled";
   }) {
@@ -229,6 +235,7 @@ export function ComposeClient() {
       await saveOrUpdatePost({
         content,
         platforms: selectedPlatforms,
+        firstComment: supportsFirstComment ? firstComment.trim() || null : null,
         scheduledAt: null,
         status: "draft",
       });
@@ -246,6 +253,7 @@ export function ComposeClient() {
       await saveOrUpdatePost({
         content,
         platforms: selectedPlatforms,
+        firstComment: supportsFirstComment ? firstComment.trim() || null : null,
         scheduledAt,
         status: "scheduled",
       });
@@ -264,12 +272,21 @@ export function ComposeClient() {
       const response = await fetch("/api/publish/now", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ postId: postId ?? undefined, content, platforms: selectedPlatforms }),
+        body: JSON.stringify({
+          postId: postId ?? undefined,
+          content,
+          platforms: selectedPlatforms,
+          firstComment: supportsFirstComment ? firstComment.trim() || null : null,
+        }),
       });
       if (!response.ok) {
         throw new Error(await readResponseError(response, "Unable to publish post"));
       }
-      toast.success("Post published.");
+      toast.success(
+        supportsFirstComment && Boolean(firstComment.trim())
+          ? "Post published and first comment added ✓"
+          : "Post published."
+      );
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Unable to publish post", {
         action: {
@@ -381,6 +398,31 @@ export function ComposeClient() {
           {(platform === "twitter" || platform === "both") && (
             <div className="mt-1 text-xs text-muted">
               Posts over 280 chars will be auto-threaded.
+            </div>
+          )}
+          {supportsFirstComment && (
+            <div className="mt-2">
+              <button
+                type="button"
+                onClick={() => setFirstCommentOpen((current) => !current)}
+                className="text-sm font-medium text-brand hover:underline"
+              >
+                {firstCommentOpen ? "− Hide first comment" : "+ Add first comment"}
+              </button>
+            </div>
+          )}
+
+          {supportsFirstComment && firstCommentOpen && (
+            <div className="mt-4 rounded-xl border border-line bg-slate-50 p-4">
+              <label className="block text-sm font-medium text-ink">
+                First comment (optional)
+              </label>
+              <textarea
+                value={firstComment}
+                onChange={(event) => setFirstComment(event.target.value.slice(0, 1250))}
+                className="quill-textarea mt-3 min-h-[120px] bg-white"
+                placeholder="This will be posted as your first comment immediately after publishing. Great for dropping your link or adding context."
+              />
             </div>
           )}
 

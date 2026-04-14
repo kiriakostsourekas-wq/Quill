@@ -11,11 +11,16 @@ const scheduledAtSchema = z
   .trim()
   .min(1)
   .refine((value) => !Number.isNaN(new Date(value).getTime()), "Invalid scheduled date");
+const firstCommentSchema = z
+  .string()
+  .trim()
+  .max(1250, "First comment must be 1250 characters or less");
 
 const updatePostSchema = z.object({
   content: z.string().trim().min(1).optional(),
   platforms: z.array(platformSchema).min(1).max(2).optional(),
   scheduledAt: scheduledAtSchema.nullable().optional(),
+  firstComment: firstCommentSchema.nullable().optional(),
   status: z.enum(["draft", "scheduled", "published", "failed"]).optional(),
 });
 
@@ -80,15 +85,22 @@ export async function PATCH(
   }
 
   const nextContent = parsed.data.content ?? existing.content;
+  const nextPlatforms = parsed.data.platforms
+    ? [...new Set(parsed.data.platforms)]
+    : existing.platforms;
+  const nextFirstComment = nextPlatforms.includes("linkedin")
+    ? parsed.data.firstComment === undefined
+      ? existing.firstComment
+      : parsed.data.firstComment?.trim() || null
+    : null;
   const { result } = await scoreVoiceTextForUser(user.id, nextContent);
 
   const post = await prisma.post.update({
     where: { id: existing.id },
     data: {
       content: nextContent,
-      platforms: parsed.data.platforms
-        ? [...new Set(parsed.data.platforms)]
-        : existing.platforms,
+      firstComment: nextFirstComment,
+      platforms: nextPlatforms,
       scheduledAt: nextScheduledAt,
       status: nextStatus,
       errorLog: nextStatus === "failed" ? existing.errorLog : null,
@@ -97,7 +109,7 @@ export async function PATCH(
   });
 
   try {
-    await syncPostDeliveries(post.id, parsed.data.platforms ?? existing.platforms);
+    await syncPostDeliveries(post.id, nextPlatforms);
   } catch (error) {
     if (error instanceof ImmutablePostError) {
       return NextResponse.json({ error: error.message }, { status: 409 });
