@@ -104,6 +104,7 @@ export function ComposeClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const postId = searchParams.get("postId");
+  const scheduledAtPrefill = searchParams.get("scheduledAt");
   const [platform, setPlatform] = useState<PlatformMode>("both");
   const [content, setContent] = useState("");
   const [voice, setVoice] = useState<VoiceScore>(emptyVoiceState);
@@ -154,6 +155,17 @@ export function ComposeClient() {
       })
       .catch(() => undefined);
   }, [postId]);
+
+  useEffect(() => {
+    if (postId || !scheduledAtPrefill) return;
+
+    const prefillDate = new Date(scheduledAtPrefill);
+    if (Number.isNaN(prefillDate.getTime())) return;
+
+    setScheduledAt(new Date(prefillDate.getTime() - prefillDate.getTimezoneOffset() * 60000).toISOString().slice(0, 16));
+    setScheduleOpen(true);
+    setPlatform("linkedin");
+  }, [postId, scheduledAtPrefill]);
 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -231,7 +243,7 @@ export function ComposeClient() {
     setLoadingScore(false);
     setRewriteLoading(false);
 
-    if (postId) {
+    if (postId || scheduledAtPrefill) {
       router.replace("/compose");
     }
   }

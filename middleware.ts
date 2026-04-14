@@ -38,6 +38,7 @@ export const config = {
     "/compose/:path*",
     "/carousel/:path*",
     "/scheduled/:path*",
+    "/calendar/:path*",
     "/voice-dna/:path*",
     "/analytics/:path*",
     "/settings/:path*",

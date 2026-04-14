@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useMemo, useState } from "react";
 import {
   BarChart3,
+  Calendar,
   CalendarRange,
   Feather,
   LayoutTemplate,
@@ -22,6 +23,7 @@ const navItems = [
   { href: "/compose", label: "Compose", icon: PenSquare },
   { href: "/carousel", label: "Carousel", icon: LayoutTemplate },
   { href: "/scheduled", label: "Scheduled", icon: CalendarRange },
+  { href: "/calendar", label: "Calendar", icon: Calendar },
   { href: "/voice-dna", label: "Voice DNA", icon: Sparkles },
   { href: "/analytics", label: "Analytics", icon: BarChart3 },
   { href: "/settings", label: "Settings", icon: Settings },
