@@ -35,7 +35,7 @@ export default async function LoginPage({
           <QuillLogo />
           <h1 className="mt-6 text-2xl font-semibold text-ink">Continue with Quill.</h1>
           <p className="mt-2 text-sm text-muted">
-            Use LinkedIn or X to create your account or sign back in.
+            Start with LinkedIn. You can connect X later from Settings.
           </p>
         </div>
 
@@ -49,18 +49,9 @@ export default async function LoginPage({
           <form action="/api/auth/linkedin" method="post">
             <button
               type="submit"
-              className="flex h-11 w-full items-center justify-center rounded-md bg-[#0A66C2] px-4 text-sm font-medium text-white transition hover:bg-[#0958A8]"
+              className="flex h-11 w-full items-center justify-center rounded-md bg-brand px-4 text-sm font-medium text-white transition hover:bg-brand/90"
             >
               Continue with LinkedIn
-            </button>
-          </form>
-
-          <form action="/api/auth/twitter" method="post">
-            <button
-              type="submit"
-              className="flex h-11 w-full items-center justify-center rounded-md bg-black px-4 text-sm font-medium text-white transition hover:bg-neutral-800"
-            >
-              Continue with X
             </button>
           </form>
         </div>

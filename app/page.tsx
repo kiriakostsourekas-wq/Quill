@@ -122,7 +122,7 @@ const faqs = [
   },
   {
     q: "Do I need to log in immediately?",
-    a: "No. You can scroll the site, review features and pricing, and only start authentication when you click Start free with LinkedIn or Start free with X.",
+    a: "No. You can scroll the site, review features and pricing, and only start authentication when you click Start free.",
   },
   {
     q: "How is Quill different from Buffer or Postiz?",
@@ -162,24 +162,19 @@ const platformPreviews = [
 function StartButtons({ centered = false }: { centered?: boolean }) {
   return (
     <div
-      className={`flex flex-col gap-3 sm:flex-row ${centered ? "items-center justify-center" : ""}`}
+      className={`flex flex-col items-start gap-3 ${centered ? "items-center justify-center" : ""}`}
     >
       <form action="/api/auth/linkedin" method="post">
         <button
           type="submit"
           className="inline-flex h-11 items-center justify-center rounded-md bg-brand px-5 text-sm font-medium text-white transition hover:bg-brand/90"
         >
-          Start free with LinkedIn
+          Start free
         </button>
       </form>
-      <form action="/api/auth/twitter" method="post">
-        <button
-          type="submit"
-          className="inline-flex h-11 items-center justify-center rounded-md border border-line bg-white px-5 text-sm font-medium text-ink transition hover:bg-slate-50"
-        >
-          Start free with X
-        </button>
-      </form>
+      <p className="text-sm text-muted">
+        Start with LinkedIn. Connect X later from Settings.
+      </p>
     </div>
   );
 }
