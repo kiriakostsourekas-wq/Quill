@@ -66,6 +66,19 @@ export function SettingsClient() {
     router.replace(next.toString() ? `/settings?${next.toString()}` : "/settings");
   }, [router, searchParams]);
 
+  useEffect(() => {
+    const error = searchParams.get("error");
+    if (!error) return;
+
+    if (error === "account_limit") {
+      toast.error("Free includes one connected social account. Upgrade to connect both LinkedIn and X.");
+    }
+
+    const next = new URLSearchParams(searchParams.toString());
+    next.delete("error");
+    router.replace(next.toString() ? `/settings?${next.toString()}` : "/settings");
+  }, [router, searchParams]);
+
   async function disconnect(platform: string) {
     const response = await fetch(`/api/accounts/${platform}`, { method: "DELETE" });
     if (!response.ok) {

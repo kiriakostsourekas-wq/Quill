@@ -5,6 +5,7 @@ import { exchangeLinkedInCode } from "@/lib/linkedin";
 import { appendOAuthCookie, clearOAuthCookie, readOAuthCookie } from "@/lib/oauth";
 import { LINKEDIN_OAUTH_COOKIE_NAME } from "@/lib/constants";
 import { encrypt } from "@/lib/encrypt";
+import { PlanLimitError, assertFreePlanSocialAccountLimit } from "@/lib/plans";
 import { safeJson } from "@/lib/utils";
 
 type LinkedInStateCookie = {
@@ -97,6 +98,7 @@ export async function GET(request: NextRequest) {
 
     const profile = await safeJson<LinkedInProfile>(profileResponse);
     const user = await resolveAppUser(payload, profile);
+    await assertFreePlanSocialAccountLimit(user, "linkedin");
 
     await prisma.socialAccount.upsert({
       where: {
@@ -139,6 +141,14 @@ export async function GET(request: NextRequest) {
     clearOAuthCookie(response, LINKEDIN_OAUTH_COOKIE_NAME);
     return response;
   } catch (error) {
+    if (error instanceof PlanLimitError) {
+      const response = buildFailureRedirect(
+        request,
+        payload?.userId ? "/settings?error=account_limit" : "/login?error=account_limit"
+      );
+      clearOAuthCookie(response, LINKEDIN_OAUTH_COOKIE_NAME);
+      return response;
+    }
     console.error("LinkedIn OAuth callback failed", error);
     const response = buildFailureRedirect(request);
     clearOAuthCookie(response, LINKEDIN_OAUTH_COOKIE_NAME);

@@ -3,10 +3,16 @@ import { z } from "zod";
 import { NextRequest, NextResponse } from "next/server";
 import { requireRequestUser } from "@/lib/auth";
 import {
+  CAROUSEL_BACKGROUND_PRESETS,
+  CAROUSEL_MODES,
   buildCarouselContent,
   MAX_CAROUSEL_BODY,
   MAX_CAROUSEL_HEADLINE,
+  MAX_CAROUSEL_TITLE,
+  normalizeCarouselSlides,
+  type CarouselSlide,
 } from "@/lib/carousel";
+import { PlanLimitError, assertPlanAllowsPlatforms } from "@/lib/plans";
 import { prisma } from "@/lib/prisma";
 import { ImmutablePostError, isPostImmutable, syncPostDeliveries } from "@/lib/publishing";
 import { scoreVoiceTextForUser, toStoredVoiceFields } from "@/lib/voice-dna";
@@ -15,6 +21,13 @@ const platformSchema = z.enum(["linkedin", "twitter"]);
 const carouselSlideSchema = z.object({
   headline: z.string().trim().max(MAX_CAROUSEL_HEADLINE, "Headline must be 60 characters or less"),
   body: z.string().trim().max(MAX_CAROUSEL_BODY, "Body must be 200 characters or less"),
+  background: z.enum(CAROUSEL_BACKGROUND_PRESETS.map((preset) => preset.key) as [string, ...string[]]),
+  imageDataUrl: z
+    .string()
+    .trim()
+    .refine((value) => value.startsWith("data:image/"), "Slide images must be JPG or PNG data URLs")
+    .nullable()
+    .optional(),
 });
 const scheduledAtSchema = z
   .string()
@@ -28,20 +41,34 @@ const firstCommentSchema = z
 
 const updatePostSchema = z.object({
   postType: z.enum(["text", "carousel"]).optional(),
-  content: z.string().trim().min(1).optional(),
+  content: z.string().trim().optional(),
+  documentTitle: z.string().trim().max(MAX_CAROUSEL_TITLE, "Title must be 120 characters or less").optional(),
+  carouselMode: z.enum(CAROUSEL_MODES).optional(),
   platforms: z.array(platformSchema).min(1).max(2).optional(),
   scheduledAt: scheduledAtSchema.nullable().optional(),
   firstComment: firstCommentSchema.nullable().optional(),
   carouselSlides: z.array(carouselSlideSchema).min(2).max(10).optional(),
+  carouselDocumentBase64: z.string().trim().nullable().optional(),
   coverSlide: z.boolean().optional(),
   status: z.enum(["draft", "scheduled", "published", "failed"]).optional(),
 }).superRefine((data, ctx) => {
-  if (data.postType === "carousel" && !data.carouselSlides) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      message: "Carousel posts require slide data",
-      path: ["carouselSlides"],
-    });
+  if (data.postType === "carousel") {
+    const mode = data.carouselMode ?? "builder";
+    if (mode === "builder" && !data.carouselSlides) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Carousel posts require slide data",
+        path: ["carouselSlides"],
+      });
+    }
+
+    if (mode === "upload" && data.carouselDocumentBase64 !== undefined && !data.carouselDocumentBase64) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Upload mode requires a PDF document",
+        path: ["carouselDocumentBase64"],
+      });
+    }
   }
 });
 
@@ -85,6 +112,19 @@ export async function PATCH(
     );
   }
 
+  const nextPlatforms = parsed.data.platforms
+    ? [...new Set(parsed.data.platforms)]
+    : existing.platforms;
+
+  try {
+    assertPlanAllowsPlatforms(user, nextPlatforms);
+  } catch (error) {
+    if (error instanceof PlanLimitError) {
+      return NextResponse.json({ error: error.message }, { status: 403 });
+    }
+    throw error;
+  }
+
   const nextScheduledAt =
     parsed.data.scheduledAt === undefined
       ? existing.scheduledAt
@@ -106,16 +146,23 @@ export async function PATCH(
   }
 
   const nextPostType = parsed.data.postType ?? existing.postType;
-  const nextPlatforms = parsed.data.platforms
-    ? [...new Set(parsed.data.platforms)]
-    : existing.platforms;
+  const nextCarouselMode =
+    nextPostType === "carousel"
+      ? parsed.data.carouselMode ?? existing.carouselMode ?? "builder"
+      : null;
   const nextCarouselSlides =
     parsed.data.carouselSlides !== undefined
       ? parsed.data.carouselSlides
-      : ((existing.carouselSlides as { headline: string; body: string }[] | null) ?? null);
+      : ((existing.carouselSlides as CarouselSlide[] | null) ?? null);
+  const nextDocumentBase64 =
+    parsed.data.carouselDocumentBase64 !== undefined
+      ? parsed.data.carouselDocumentBase64?.trim() || null
+      : existing.carouselDocumentBase64;
   const nextContent =
     nextPostType === "carousel"
-      ? buildCarouselContent(nextCarouselSlides ?? [])
+      ? nextCarouselMode === "builder"
+        ? buildCarouselContent(normalizeCarouselSlides(nextCarouselSlides ?? []))
+        : parsed.data.content ?? existing.content
       : parsed.data.content ?? existing.content;
   const nextFirstComment = nextPlatforms.includes("linkedin")
     ? parsed.data.firstComment === undefined
@@ -132,8 +179,19 @@ export async function PATCH(
       postType: nextPostType,
       content: nextContent,
       firstComment: nextFirstComment,
+      documentTitle:
+        nextPostType === "carousel"
+          ? parsed.data.documentTitle?.trim() ?? existing.documentTitle
+          : null,
+      carouselMode: nextCarouselMode,
       carouselSlides:
-        nextPostType === "carousel" ? nextCarouselSlides ?? [] : Prisma.JsonNull,
+        nextPostType === "carousel" && nextCarouselMode === "builder"
+          ? nextCarouselSlides ?? []
+          : Prisma.JsonNull,
+      carouselDocumentBase64:
+        nextPostType === "carousel" && nextCarouselMode === "upload"
+          ? nextDocumentBase64
+          : null,
       coverSlide:
         nextPostType === "carousel"
           ? parsed.data.coverSlide ?? existing.coverSlide

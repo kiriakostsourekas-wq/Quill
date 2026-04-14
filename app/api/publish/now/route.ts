@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { NextRequest, NextResponse } from "next/server";
 import { requireRequestUser } from "@/lib/auth";
+import { PlanLimitError, assertFreePlanPostLimit, assertPlanAllowsPlatforms } from "@/lib/plans";
 import { prisma } from "@/lib/prisma";
 import {
   claimAndPublishPost,
@@ -39,6 +40,16 @@ export async function POST(request: NextRequest) {
       { error: parsed.error.issues[0]?.message ?? "Invalid publish payload" },
       { status: 400 }
     );
+  }
+
+  try {
+    assertPlanAllowsPlatforms(user, parsed.data.platforms);
+    await assertFreePlanPostLimit(user, parsed.data.postId);
+  } catch (error) {
+    if (error instanceof PlanLimitError) {
+      return NextResponse.json({ error: error.message }, { status: 403 });
+    }
+    throw error;
   }
 
   let postId = parsed.data.postId;

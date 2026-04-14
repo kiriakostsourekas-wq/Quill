@@ -44,7 +44,10 @@ model Post {
   postType             String              @default("text")
   content              String
   firstComment         String?
+  documentTitle        String?
+  carouselMode         String?
   carouselSlides       Json?
+  carouselDocumentBase64 String?
   coverSlide           Boolean             @default(false)
   platforms            String[]
   status               String              @default("draft")

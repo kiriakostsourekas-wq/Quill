@@ -8,6 +8,7 @@ import {
   TWITTER_PKCE_VERIFIER_COOKIE_NAME,
 } from "@/lib/constants";
 import { encrypt } from "@/lib/encrypt";
+import { PlanLimitError, assertFreePlanSocialAccountLimit } from "@/lib/plans";
 import { safeJson } from "@/lib/utils";
 
 type TwitterStateCookie = {
@@ -126,6 +127,7 @@ export async function GET(request: NextRequest) {
 
     const profile = await safeJson<TwitterProfile>(profileResponse);
     const user = await resolveAppUser(payload, profile.data);
+    await assertFreePlanSocialAccountLimit(user, "twitter");
 
     await prisma.socialAccount.upsert({
       where: {
@@ -169,6 +171,15 @@ export async function GET(request: NextRequest) {
     clearOAuthCookie(response, TWITTER_PKCE_VERIFIER_COOKIE_NAME);
     return response;
   } catch (error) {
+    if (error instanceof PlanLimitError) {
+      const response = buildFailureRedirect(
+        request,
+        payload?.userId ? "/settings?error=account_limit" : "/login?error=account_limit"
+      );
+      clearOAuthCookie(response, TWITTER_OAUTH_COOKIE_NAME);
+      clearOAuthCookie(response, TWITTER_PKCE_VERIFIER_COOKIE_NAME);
+      return response;
+    }
     console.error("Twitter OAuth callback failed", error);
     const response = buildFailureRedirect(request);
     clearOAuthCookie(response, TWITTER_OAUTH_COOKIE_NAME);

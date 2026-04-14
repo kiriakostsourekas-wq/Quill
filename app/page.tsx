@@ -70,14 +70,29 @@ const features = [
 
 const plans = [
   {
+    name: "Free",
+    price: "$0",
+    description: "For trying Quill without a card and building an initial publishing habit.",
+    note: "No card required",
+    features: [
+      "Up to 10 posts per month",
+      "One connected social account",
+      "Voice DNA scoring",
+      "Carousel creator",
+    ],
+    featured: false,
+  },
+  {
     name: "Solo",
     price: "$12",
-    description: "For creators who want consistent publishing without losing their voice.",
+    description: "For creators who want to publish more often across LinkedIn and X.",
+    note: "7-day trial, card required",
     features: [
+      "Unlimited posts",
       "LinkedIn + X publishing",
       "Unlimited scheduled posts",
-      "Voice DNA profile",
-      "Smart scheduling",
+      "First comment automation",
+      "Advanced carousel publishing",
     ],
     featured: false,
   },
@@ -85,6 +100,7 @@ const plans = [
     name: "Pro",
     price: "$29",
     description: "For power users who want rewriting, stronger workflows, and analytics.",
+    note: "7-day trial, card required",
     features: [
       "Everything in Solo",
       "AI voice rewriting",
@@ -113,8 +129,12 @@ const faqs = [
     a: "Most schedulers optimize for output volume. Quill is built around preserving voice quality, so the product helps you scale posting without sounding like generic AI.",
   },
   {
+    q: "Can I use Quill for free?",
+    a: "Yes. Quill includes a limited Free plan with up to 10 posts per month and one connected social account. Paid plans add unlimited posting, multi-platform workflows, and advanced features.",
+  },
+  {
     q: "Can I cancel anytime?",
-    a: "Yes. Plans include a 7-day free trial, and you can cancel before billing or later from your account settings.",
+    a: "Yes. Free never requires a card. Paid plans start with a 7-day trial, and you can cancel before billing or later from your account settings.",
   },
 ];
 
@@ -228,7 +248,9 @@ export default async function HomePage() {
             <StartButtons centered />
           </div>
 
-          <p className="mt-5 text-sm text-muted">7-day free trial · Cancel anytime</p>
+          <p className="mt-5 text-sm text-muted">
+            Free plan available · Paid plans start with a 7-day trial
+          </p>
         </div>
       </section>
 
@@ -419,7 +441,7 @@ export default async function HomePage() {
             </h2>
           </div>
 
-          <div className="mx-auto grid max-w-3xl gap-8 md:grid-cols-2">
+          <div className="mx-auto grid max-w-5xl gap-8 lg:grid-cols-3">
             {plans.map((plan) => (
               <div
                 key={plan.name}
@@ -439,6 +461,9 @@ export default async function HomePage() {
                 <div className="mb-6 mt-6">
                   <span className="text-4xl font-bold text-ink">{plan.price}</span>
                   <span className="text-sm text-muted">/month</span>
+                  <p className="mt-2 text-xs font-medium uppercase tracking-[0.12em] text-muted">
+                    {plan.note}
+                  </p>
                 </div>
 
                 <ul className="mb-8 space-y-3">
@@ -456,7 +481,7 @@ export default async function HomePage() {
           </div>
 
           <p className="mt-8 text-center text-sm text-muted">
-            7-day free trial on all plans. Cancel anytime.
+            Everyone starts on Free. Upgrade inside Quill when you need more volume, multi-platform publishing, and analytics.
           </p>
         </div>
       </section>

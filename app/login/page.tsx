@@ -14,6 +14,8 @@ const errorMessages: Record<string, string> = {
   twitter_denied: "X sign-in was cancelled before it completed.",
   twitter_auth:
     "X sign-in failed after the provider callback. Check the callback logs in Vercel and confirm the X app credentials are correct.",
+  account_limit:
+    "Free includes one connected social account. Upgrade inside Quill to connect both LinkedIn and X.",
 };
 
 export default async function LoginPage({

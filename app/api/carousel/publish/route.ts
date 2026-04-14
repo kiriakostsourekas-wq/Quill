@@ -1,30 +1,42 @@
+import { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { NextRequest, NextResponse } from "next/server";
 import { requireRequestUser } from "@/lib/auth";
 import {
+  CAROUSEL_BACKGROUND_PRESETS,
+  CAROUSEL_MODES,
   buildCarouselContent,
   MAX_CAROUSEL_BODY,
   MAX_CAROUSEL_HEADLINE,
+  MAX_CAROUSEL_TITLE,
   type CarouselSlide,
 } from "@/lib/carousel";
-import { generateCarouselPDF } from "@/lib/carousel-pdf";
-import {
-  getFreshLinkedInAccount,
-  postLinkedInComment,
-  uploadLinkedInDocument,
-} from "@/lib/linkedin";
+import { base64ToPdfBytes } from "@/lib/carousel-pdf";
+import { getFreshLinkedInAccount, postLinkedInComment, uploadLinkedInDocument } from "@/lib/linkedin";
+import { PlanLimitError, assertFreePlanPostLimit } from "@/lib/plans";
 import { prisma } from "@/lib/prisma";
 import { scoreVoiceTextForUser, toStoredVoiceFields } from "@/lib/voice-dna";
 
 const carouselSlideSchema = z.object({
   headline: z.string().trim().min(1, "Each slide needs a headline").max(MAX_CAROUSEL_HEADLINE),
   body: z.string().trim().max(MAX_CAROUSEL_BODY),
+  background: z.enum(CAROUSEL_BACKGROUND_PRESETS.map((preset) => preset.key) as [string, ...string[]]),
+  imageDataUrl: z
+    .string()
+    .trim()
+    .refine((value) => value.startsWith("data:image/"), "Slide images must be JPG or PNG data URLs")
+    .nullable()
+    .optional(),
 });
 
 const publishCarouselSchema = z.object({
   postId: z.string().optional(),
-  slides: z.array(carouselSlideSchema).min(2).max(10),
+  title: z.string().trim().min(1, "Title is required").max(MAX_CAROUSEL_TITLE),
+  carouselMode: z.enum(CAROUSEL_MODES),
+  slides: z.array(carouselSlideSchema).min(2).max(10).optional(),
   coverSlide: z.boolean().default(false),
+  voiceText: z.string().trim().optional(),
+  pdfBase64: z.string().trim().min(1, "PDF data is required"),
   firstComment: z
     .string()
     .trim()
@@ -75,13 +87,36 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const slides = parsed.data.slides.map((slide) => ({
+  if (parsed.data.carouselMode === "builder" && (!parsed.data.slides || parsed.data.slides.length < 2)) {
+    return NextResponse.json(
+      { error: "Builder mode requires at least 2 slides" },
+      { status: 400 }
+    );
+  }
+
+  try {
+    await assertFreePlanPostLimit(user, parsed.data.postId);
+  } catch (error) {
+    if (error instanceof PlanLimitError) {
+      return NextResponse.json({ error: error.message }, { status: 403 });
+    }
+    throw error;
+  }
+
+  const slides = (parsed.data.slides ?? []).map((slide) => ({
     headline: slide.headline.trim(),
     body: slide.body.trim(),
-  }));
-  const content = buildCarouselContent(slides);
+    background: slide.background,
+    imageDataUrl: slide.imageDataUrl ?? null,
+  })) as CarouselSlide[];
+  const content =
+    parsed.data.carouselMode === "builder"
+      ? buildCarouselContent(slides)
+      : parsed.data.voiceText?.trim() ?? "";
   const firstComment = parsed.data.firstComment?.trim() || null;
-  const { result } = await scoreVoiceTextForUser(user.id, content);
+  const { result } = content.trim()
+    ? await scoreVoiceTextForUser(user.id, content)
+    : { result: null };
 
   const appUser = await prisma.user.findUnique({
     where: { id: user.id },
@@ -125,9 +160,13 @@ export async function POST(request: NextRequest) {
         where: { id: postRecord.id },
         data: {
           postType: "carousel",
+          documentTitle: parsed.data.title.trim(),
+          carouselMode: parsed.data.carouselMode,
           content,
           firstComment,
-          carouselSlides: slides,
+          carouselSlides:
+            parsed.data.carouselMode === "builder" ? slides : Prisma.JsonNull,
+          carouselDocumentBase64: parsed.data.pdfBase64,
           coverSlide: parsed.data.coverSlide,
           platforms: ["linkedin"],
           status: "draft",
@@ -142,9 +181,13 @@ export async function POST(request: NextRequest) {
         data: {
           userId: user.id,
           postType: "carousel",
+          documentTitle: parsed.data.title.trim(),
+          carouselMode: parsed.data.carouselMode,
           content,
           firstComment,
-          carouselSlides: slides,
+          carouselSlides:
+            parsed.data.carouselMode === "builder" ? slides : Prisma.JsonNull,
+          carouselDocumentBase64: parsed.data.pdfBase64,
           coverSlide: parsed.data.coverSlide,
           platforms: ["linkedin"],
           status: "draft",
@@ -155,14 +198,14 @@ export async function POST(request: NextRequest) {
   postId = postRecord.id;
 
   try {
-    const pdfBytes = await generateCarouselPDF(slides, parsed.data.coverSlide);
+    const pdfBytes = base64ToPdfBytes(parsed.data.pdfBase64);
     const { accessToken, account: freshAccount } = await getFreshLinkedInAccount(linkedinAccount);
 
     if (!freshAccount.accountId) {
       throw new Error("LinkedIn author ID is missing");
     }
 
-    const title = slides[0]?.headline || "Quill carousel";
+    const title = parsed.data.title.trim();
     const assetUrn = await uploadLinkedInDocument(
       accessToken,
       freshAccount.accountId,
@@ -192,7 +235,7 @@ export async function POST(request: NextRequest) {
                 media: assetUrn,
                 title: { text: title },
                 description: {
-                  text: slides[0]?.body || "Created with Quill",
+                  text: content || "Created with Quill",
                 },
               },
             ],
@@ -259,21 +302,17 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    return NextResponse.json({ success: true, postUrn });
+    return NextResponse.json({ success: true, postUrn, postId });
   } catch (error) {
+    const message = error instanceof Error ? error.message : "Unable to publish carousel";
     await prisma.post.update({
       where: { id: postId },
       data: {
         status: "failed",
-        errorLog: error instanceof Error ? error.message : "Carousel publishing failed",
+        errorLog: message,
       },
     });
 
-    return NextResponse.json(
-      {
-        error: error instanceof Error ? error.message : "Carousel publishing failed",
-      },
-      { status: 400 }
-    );
+    return NextResponse.json({ error: message }, { status: 400 });
   }
 }
