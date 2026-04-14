@@ -7,6 +7,7 @@ import {
   BarChart3,
   CalendarRange,
   Feather,
+  LayoutTemplate,
   LayoutDashboard,
   LogOut,
   MenuSquare,
@@ -19,6 +20,7 @@ import { cn } from "@/lib/utils";
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/compose", label: "Compose", icon: PenSquare },
+  { href: "/carousel", label: "Carousel", icon: LayoutTemplate },
   { href: "/scheduled", label: "Scheduled", icon: CalendarRange },
   { href: "/voice-dna", label: "Voice DNA", icon: Sparkles },
   { href: "/analytics", label: "Analytics", icon: BarChart3 },

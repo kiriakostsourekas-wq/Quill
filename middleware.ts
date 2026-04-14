@@ -36,6 +36,7 @@ export const config = {
   matcher: [
     "/dashboard/:path*",
     "/compose/:path*",
+    "/carousel/:path*",
     "/scheduled/:path*",
     "/voice-dna/:path*",
     "/analytics/:path*",

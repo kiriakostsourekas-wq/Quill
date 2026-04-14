@@ -17,7 +17,11 @@ type DeliveryRecord = {
 
 type PostRecord = {
   id: string;
+  postType?: string;
   content: string;
+  firstComment?: string | null;
+  carouselSlides?: Array<{ headline: string; body: string }> | null;
+  coverSlide?: boolean;
   platforms: string[];
   status: string;
   scheduledAt?: string | null;
@@ -86,15 +90,27 @@ export function ScheduledClient() {
   }
 
   async function retryPost(post: PostRecord) {
-    const response = await fetch("/api/publish/now", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        postId: post.id,
-        content: post.content,
-        platforms: post.platforms,
-      }),
-    });
+    const response =
+      post.postType === "carousel"
+        ? await fetch("/api/carousel/publish", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              postId: post.id,
+              slides: post.carouselSlides ?? [],
+              coverSlide: post.coverSlide ?? false,
+              firstComment: post.firstComment ?? null,
+            }),
+          })
+        : await fetch("/api/publish/now", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              postId: post.id,
+              content: post.content,
+              platforms: post.platforms,
+            }),
+          });
     if (!response.ok) {
       toast.error(await readResponseError(response, "Unable to retry publishing"));
       return;
@@ -156,7 +172,13 @@ export function ScheduledClient() {
             return (
               <div key={post.id} className="flex flex-col gap-4 px-5 py-4 lg:flex-row lg:items-center">
                 <div className="min-w-0 flex-1">
-                  <p className="line-clamp-2 text-sm leading-6 text-ink">{post.content}</p>
+                  {post.postType === "carousel" ? (
+                    <div className="inline-flex rounded-full bg-brand-light px-3 py-1 text-xs font-medium text-brand">
+                      Carousel
+                    </div>
+                  ) : (
+                    <p className="line-clamp-2 text-sm leading-6 text-ink">{post.content}</p>
+                  )}
                   <div className="mt-3 flex flex-wrap items-center gap-2">
                     {post.platforms.map((platform) => (
                       <PlatformBadge key={`${post.id}-${platform}`} platform={platform} />
@@ -178,7 +200,7 @@ export function ScheduledClient() {
                       Retry publish
                     </Button>
                   ) : canEdit ? (
-                    <Link href={`/compose?postId=${post.id}`}>
+                    <Link href={`${post.postType === "carousel" ? "/carousel" : "/compose"}?postId=${post.id}`}>
                       <Button variant="outline" className="gap-2">
                         <Pencil className="h-4 w-4" />
                         Edit

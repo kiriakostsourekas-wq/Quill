@@ -41,8 +41,11 @@ model SocialAccount {
 model Post {
   id                   String              @id @default(cuid())
   userId               String
+  postType             String              @default("text")
   content              String
   firstComment         String?
+  carouselSlides       Json?
+  coverSlide           Boolean             @default(false)
   platforms            String[]
   status               String              @default("draft")
   voiceScore           Int?

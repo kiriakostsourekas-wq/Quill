@@ -1,11 +1,21 @@
+import { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { NextRequest, NextResponse } from "next/server";
 import { requireRequestUser } from "@/lib/auth";
+import {
+  buildCarouselContent,
+  MAX_CAROUSEL_BODY,
+  MAX_CAROUSEL_HEADLINE,
+} from "@/lib/carousel";
 import { prisma } from "@/lib/prisma";
 import { ImmutablePostError, isPostImmutable, syncPostDeliveries } from "@/lib/publishing";
 import { scoreVoiceTextForUser, toStoredVoiceFields } from "@/lib/voice-dna";
 
 const platformSchema = z.enum(["linkedin", "twitter"]);
+const carouselSlideSchema = z.object({
+  headline: z.string().trim().max(MAX_CAROUSEL_HEADLINE, "Headline must be 60 characters or less"),
+  body: z.string().trim().max(MAX_CAROUSEL_BODY, "Body must be 200 characters or less"),
+});
 const scheduledAtSchema = z
   .string()
   .trim()
@@ -17,11 +27,22 @@ const firstCommentSchema = z
   .max(1250, "First comment must be 1250 characters or less");
 
 const updatePostSchema = z.object({
+  postType: z.enum(["text", "carousel"]).optional(),
   content: z.string().trim().min(1).optional(),
   platforms: z.array(platformSchema).min(1).max(2).optional(),
   scheduledAt: scheduledAtSchema.nullable().optional(),
   firstComment: firstCommentSchema.nullable().optional(),
+  carouselSlides: z.array(carouselSlideSchema).min(2).max(10).optional(),
+  coverSlide: z.boolean().optional(),
   status: z.enum(["draft", "scheduled", "published", "failed"]).optional(),
+}).superRefine((data, ctx) => {
+  if (data.postType === "carousel" && !data.carouselSlides) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Carousel posts require slide data",
+      path: ["carouselSlides"],
+    });
+  }
 });
 
 export async function PATCH(
@@ -84,22 +105,39 @@ export async function PATCH(
     );
   }
 
-  const nextContent = parsed.data.content ?? existing.content;
+  const nextPostType = parsed.data.postType ?? existing.postType;
   const nextPlatforms = parsed.data.platforms
     ? [...new Set(parsed.data.platforms)]
     : existing.platforms;
+  const nextCarouselSlides =
+    parsed.data.carouselSlides !== undefined
+      ? parsed.data.carouselSlides
+      : ((existing.carouselSlides as { headline: string; body: string }[] | null) ?? null);
+  const nextContent =
+    nextPostType === "carousel"
+      ? buildCarouselContent(nextCarouselSlides ?? [])
+      : parsed.data.content ?? existing.content;
   const nextFirstComment = nextPlatforms.includes("linkedin")
     ? parsed.data.firstComment === undefined
       ? existing.firstComment
       : parsed.data.firstComment?.trim() || null
     : null;
-  const { result } = await scoreVoiceTextForUser(user.id, nextContent);
+  const { result } = nextContent.trim()
+    ? await scoreVoiceTextForUser(user.id, nextContent)
+    : { result: null };
 
   const post = await prisma.post.update({
     where: { id: existing.id },
     data: {
+      postType: nextPostType,
       content: nextContent,
       firstComment: nextFirstComment,
+      carouselSlides:
+        nextPostType === "carousel" ? nextCarouselSlides ?? [] : Prisma.JsonNull,
+      coverSlide:
+        nextPostType === "carousel"
+          ? parsed.data.coverSlide ?? existing.coverSlide
+          : false,
       platforms: nextPlatforms,
       scheduledAt: nextScheduledAt,
       status: nextStatus,

@@ -273,3 +273,77 @@ export async function postLinkedInComment(
     throw new Error(`LinkedIn comment failed: ${err}`);
   }
 }
+
+export async function uploadLinkedInDocument(
+  accessToken: string,
+  authorUrn: string,
+  pdfBytes: Uint8Array,
+  title: string
+): Promise<string> {
+  const registerResponse = await fetch("https://api.linkedin.com/v2/assets?action=registerUpload", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+      "X-Restli-Protocol-Version": "2.0.0",
+    },
+    body: JSON.stringify({
+      registerUploadRequest: {
+        owner: authorUrn,
+        recipes: ["urn:li:digitalmediaRecipe:feedshare-document"],
+        serviceRelationships: [
+          {
+            relationshipType: "OWNER",
+            identifier: "urn:li:userGeneratedContent",
+          },
+        ],
+        supportedUploadMechanism: ["SYNCHRONOUS_UPLOAD"],
+      },
+    }),
+  });
+
+  if (!registerResponse.ok) {
+    const details = await registerResponse.text();
+    throw new Error(
+      `LinkedIn document register upload failed (${registerResponse.status}): ${details || "no response body"}`
+    );
+  }
+
+  const registerBody = await safeJson<{
+    value?: {
+      asset?: string;
+      uploadMechanism?: {
+        "com.linkedin.digitalmedia.uploading.MediaUploadHttpRequest"?: {
+          uploadUrl?: string;
+        };
+      };
+    };
+  }>(registerResponse);
+
+  const assetUrn = registerBody.value?.asset;
+  const uploadUrl =
+    registerBody.value?.uploadMechanism?.[
+      "com.linkedin.digitalmedia.uploading.MediaUploadHttpRequest"
+    ]?.uploadUrl;
+
+  if (!assetUrn || !uploadUrl) {
+    throw new Error("LinkedIn document upload registration returned incomplete data");
+  }
+
+  const uploadResponse = await fetch(uploadUrl, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/pdf",
+    },
+    body: Uint8Array.from(pdfBytes),
+  });
+
+  if (!uploadResponse.ok) {
+    const details = await uploadResponse.text();
+    throw new Error(
+      `LinkedIn document binary upload failed (${uploadResponse.status}): ${details || "no response body"}`
+    );
+  }
+
+  return assetUrn;
+}

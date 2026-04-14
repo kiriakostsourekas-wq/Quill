@@ -1,11 +1,21 @@
+import { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { NextRequest, NextResponse } from "next/server";
 import { requireRequestUser } from "@/lib/auth";
+import {
+  buildCarouselContent,
+  MAX_CAROUSEL_BODY,
+  MAX_CAROUSEL_HEADLINE,
+} from "@/lib/carousel";
 import { prisma } from "@/lib/prisma";
 import { syncPostDeliveries } from "@/lib/publishing";
 import { scoreVoiceTextForUser, toStoredVoiceFields } from "@/lib/voice-dna";
 
 const platformSchema = z.enum(["linkedin", "twitter"]);
+const carouselSlideSchema = z.object({
+  headline: z.string().trim().max(MAX_CAROUSEL_HEADLINE, "Headline must be 60 characters or less"),
+  body: z.string().trim().max(MAX_CAROUSEL_BODY, "Body must be 200 characters or less"),
+});
 const scheduledAtSchema = z
   .string()
   .trim()
@@ -18,10 +28,33 @@ const firstCommentSchema = z
   .optional();
 
 const createPostSchema = z.object({
-  content: z.string().trim().min(1, "Content is required"),
+  postType: z.enum(["text", "carousel"]).default("text"),
+  content: z.string().trim().optional(),
   platforms: z.array(platformSchema).min(1).max(2),
   scheduledAt: scheduledAtSchema.optional(),
   firstComment: firstCommentSchema.nullable().optional(),
+  carouselSlides: z.array(carouselSlideSchema).min(2).max(10).optional(),
+  coverSlide: z.boolean().optional(),
+}).superRefine((data, ctx) => {
+  if (data.postType === "carousel") {
+    if (!data.carouselSlides || data.carouselSlides.length < 2) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Carousel posts require at least 2 slides",
+        path: ["carouselSlides"],
+      });
+      return;
+    }
+    return;
+  }
+
+  if (!data.content?.trim()) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Content is required",
+      path: ["content"],
+    });
+  }
 });
 
 export async function GET(request: NextRequest) {
@@ -74,13 +107,25 @@ export async function POST(request: NextRequest) {
   const firstComment = parsed.data.platforms.includes("linkedin")
     ? parsed.data.firstComment?.trim() || null
     : null;
-  const { result } = await scoreVoiceTextForUser(user.id, parsed.data.content);
+  const content =
+    parsed.data.postType === "carousel"
+      ? buildCarouselContent(parsed.data.carouselSlides ?? [])
+      : parsed.data.content?.trim() ?? "";
+  const { result } = content.trim()
+    ? await scoreVoiceTextForUser(user.id, content)
+    : { result: null };
 
   const post = await prisma.post.create({
     data: {
       userId: user.id,
-      content: parsed.data.content,
+      postType: parsed.data.postType,
+      content,
       firstComment,
+      carouselSlides:
+        parsed.data.postType === "carousel"
+          ? parsed.data.carouselSlides ?? []
+          : Prisma.JsonNull,
+      coverSlide: parsed.data.postType === "carousel" ? parsed.data.coverSlide ?? false : false,
       platforms: [...new Set(parsed.data.platforms)],
       scheduledAt,
       status,
