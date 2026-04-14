@@ -21,6 +21,7 @@ export async function GET(request: NextRequest) {
       avatar: user.avatar,
       plan: getEffectivePlan(user),
       role: user.role,
+      topics: user.topics,
       voiceProfile: user.voiceProfile,
     },
   });
@@ -58,6 +59,7 @@ export async function PATCH(request: NextRequest) {
       avatar: updatedUser.avatar,
       plan: getEffectivePlan(updatedUser),
       role: updatedUser.role,
+      topics: updatedUser.topics,
       voiceProfile: updatedUser.voiceProfile,
     },
   });

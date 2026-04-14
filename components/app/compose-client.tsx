@@ -3,9 +3,10 @@
 import Link from "next/link";
 import { format } from "date-fns";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Check } from "lucide-react";
+import { Check, X } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
+import { IdeasClient } from "@/components/app/ideas-client";
 import { Button } from "@/components/ui/button";
 
 type VoiceScore = {
@@ -104,6 +105,7 @@ export function ComposeClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const postId = searchParams.get("postId");
+  const ideaPrefill = searchParams.get("idea");
   const scheduledAtPrefill = searchParams.get("scheduledAt");
   const [platform, setPlatform] = useState<PlatformMode>("both");
   const [content, setContent] = useState("");
@@ -117,6 +119,7 @@ export function ComposeClient() {
   const [firstCommentOpen, setFirstCommentOpen] = useState(false);
   const [rewriteLoading, setRewriteLoading] = useState(false);
   const [successState, setSuccessState] = useState<ComposeSuccessState | null>(null);
+  const [showIdeaBanner, setShowIdeaBanner] = useState(false);
   const debounceRef = useRef<NodeJS.Timeout | null>(null);
   const successTimerRef = useRef<NodeJS.Timeout | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
@@ -155,6 +158,17 @@ export function ComposeClient() {
       })
       .catch(() => undefined);
   }, [postId]);
+
+  useEffect(() => {
+    if (postId || !ideaPrefill) {
+      setShowIdeaBanner(false);
+      return;
+    }
+
+    setContent(ideaPrefill);
+    setShowIdeaBanner(true);
+    setPlatform("linkedin");
+  }, [ideaPrefill, postId]);
 
   useEffect(() => {
     if (postId || !scheduledAtPrefill) return;
@@ -242,8 +256,9 @@ export function ComposeClient() {
     setScheduledAt("");
     setLoadingScore(false);
     setRewriteLoading(false);
+    setShowIdeaBanner(false);
 
-    if (postId || scheduledAtPrefill) {
+    if (postId || scheduledAtPrefill || ideaPrefill) {
       router.replace("/compose");
     }
   }
@@ -259,6 +274,17 @@ export function ComposeClient() {
     }
     setSuccessState(null);
     clearComposeState();
+  }
+
+  function dismissIdeaBanner() {
+    setShowIdeaBanner(false);
+
+    if (!ideaPrefill) return;
+
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete("idea");
+    const query = params.toString();
+    router.replace(query ? `/compose?${query}` : "/compose");
   }
 
   const countLabel = useMemo(() => {
@@ -469,6 +495,22 @@ export function ComposeClient() {
             ))}
           </div>
 
+          {showIdeaBanner && (
+            <div className="mt-5 flex items-start justify-between gap-3 rounded-xl border border-brand/20 bg-brand-light/40 px-4 py-3 text-sm text-muted">
+              <p>
+                Starting from an idea — expand it in your voice.
+              </p>
+              <button
+                type="button"
+                onClick={dismissIdeaBanner}
+                className="shrink-0 text-muted transition hover:text-brand"
+                aria-label="Dismiss idea banner"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          )}
+
           <div className="relative mt-5">
             {shouldHighlightWeakest && (
               <div
@@ -667,6 +709,8 @@ export function ComposeClient() {
         </div>
       </div>
       )}
+
+      {!successState && <IdeasClient embedded />}
     </section>
   );
 }

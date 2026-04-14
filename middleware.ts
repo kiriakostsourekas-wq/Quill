@@ -40,6 +40,7 @@ export const config = {
     "/scheduled/:path*",
     "/calendar/:path*",
     "/voice-dna/:path*",
+    "/ideas/:path*",
     "/analytics/:path*",
     "/settings/:path*",
     "/onboarding",

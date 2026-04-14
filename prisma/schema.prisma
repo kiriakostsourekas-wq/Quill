@@ -15,11 +15,13 @@ model User {
   stripeCustomerId String?
   plan             String          @default("free")
   role             String          @default("user")
+  topics           String[]        @default([])
   onboardingCompleted Boolean      @default(false)
   marketingConsent Boolean         @default(true)
   createdAt        DateTime        @default(now())
   socialAccounts   SocialAccount[]
   posts            Post[]
+  savedIdeas       SavedIdea[]
   voiceProfile     VoiceProfile?
   onboardingResponse OnboardingResponse?
 }
@@ -125,4 +127,14 @@ model OnboardingResponse {
   marketingConsent Boolean  @default(true)
   createdAt        DateTime @default(now())
   user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model SavedIdea {
+  id        String   @id @default(cuid())
+  userId    String
+  hook      String
+  expansion String
+  type      String
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }

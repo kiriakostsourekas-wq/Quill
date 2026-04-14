@@ -8,6 +8,7 @@ import {
   Calendar,
   CalendarRange,
   Feather,
+  Lightbulb,
   LayoutTemplate,
   LayoutDashboard,
   LogOut,
@@ -25,6 +26,7 @@ const navItems = [
   { href: "/scheduled", label: "Scheduled", icon: CalendarRange },
   { href: "/calendar", label: "Calendar", icon: Calendar },
   { href: "/voice-dna", label: "Voice DNA", icon: Sparkles },
+  { href: "/ideas", label: "Ideas", icon: Lightbulb },
   { href: "/analytics", label: "Analytics", icon: BarChart3 },
   { href: "/settings", label: "Settings", icon: Settings },
 ];

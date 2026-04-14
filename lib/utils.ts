@@ -22,6 +22,13 @@ export function parseJsonObject<T>(content: string): T {
   return JSON.parse(trimmed.slice(start, end + 1)) as T;
 }
 
+export function parseJsonArray<T>(content: string): T {
+  const trimmed = content.trim();
+  const start = trimmed.indexOf("[");
+  const end = trimmed.lastIndexOf("]");
+  return JSON.parse(trimmed.slice(start, end + 1)) as T;
+}
+
 export function splitVoiceSamples(raw: string) {
   return raw
     .split(/\n\s*\n|\n/)
