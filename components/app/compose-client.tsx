@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { format } from "date-fns";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { Check } from "lucide-react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 
@@ -18,12 +19,31 @@ type VoiceScore = {
 };
 
 type PlatformMode = "linkedin" | "twitter" | "both";
+type PublishPlatform = "linkedin" | "twitter";
+type ComposeSuccessState =
+  | {
+      kind: "published";
+      platforms: PublishPlatform[];
+    }
+  | {
+      kind: "scheduled";
+      scheduledAt: string;
+    };
 
 const platformTabs: { label: string; value: PlatformMode }[] = [
   { label: "LinkedIn", value: "linkedin" },
   { label: "X", value: "twitter" },
   { label: "Both", value: "both" },
 ];
+
+const emptyVoiceState: VoiceScore = {
+  score: null,
+  feedback: "Start writing to score your post.",
+  tip: "",
+  weakestSentence: "",
+  suggestions: [],
+  traits: [],
+};
 
 function escapeHtml(value: string) {
   return value
@@ -81,18 +101,12 @@ function buildHighlightMarkup(text: string, weakestSentence: string) {
 }
 
 export function ComposeClient() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const postId = searchParams.get("postId");
   const [platform, setPlatform] = useState<PlatformMode>("both");
   const [content, setContent] = useState("");
-  const [voice, setVoice] = useState<VoiceScore>({
-    score: null,
-    feedback: "Set up your Voice DNA first",
-    tip: "",
-    weakestSentence: "",
-    suggestions: [],
-    traits: [],
-  });
+  const [voice, setVoice] = useState<VoiceScore>(emptyVoiceState);
   const [loadingScore, setLoadingScore] = useState(false);
   const [saving, setSaving] = useState(false);
   const [publishing, setPublishing] = useState(false);
@@ -101,7 +115,9 @@ export function ComposeClient() {
   const [firstComment, setFirstComment] = useState("");
   const [firstCommentOpen, setFirstCommentOpen] = useState(false);
   const [rewriteLoading, setRewriteLoading] = useState(false);
+  const [successState, setSuccessState] = useState<ComposeSuccessState | null>(null);
   const debounceRef = useRef<NodeJS.Timeout | null>(null);
+  const successTimerRef = useRef<NodeJS.Timeout | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const highlightRef = useRef<HTMLDivElement | null>(null);
 
@@ -142,14 +158,7 @@ export function ComposeClient() {
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     if (!content.trim()) {
-      setVoice({
-        score: null,
-        feedback: "Start writing to score your post.",
-        tip: "",
-        weakestSentence: "",
-        suggestions: [],
-        traits: [],
-      });
+      setVoice(emptyVoiceState);
       return;
     }
 
@@ -182,10 +191,62 @@ export function ComposeClient() {
     };
   }, [content]);
 
+  useEffect(() => {
+    if (!successState) return;
+
+    successTimerRef.current = setTimeout(() => {
+      setSuccessState(null);
+    }, 4000);
+
+    return () => {
+      if (successTimerRef.current) {
+        clearTimeout(successTimerRef.current);
+      }
+    };
+  }, [successState]);
+
   function syncHighlightScroll() {
     if (!textareaRef.current || !highlightRef.current) return;
     highlightRef.current.scrollTop = textareaRef.current.scrollTop;
     highlightRef.current.scrollLeft = textareaRef.current.scrollLeft;
+  }
+
+  function formatPlatformLabel(platforms: PublishPlatform[]) {
+    if (platforms.length === 2) return "LinkedIn and X";
+    return platforms[0] === "twitter" ? "X" : "LinkedIn";
+  }
+
+  function clearComposeState() {
+    if (successTimerRef.current) {
+      clearTimeout(successTimerRef.current);
+    }
+
+    setContent("");
+    setFirstComment("");
+    setFirstCommentOpen(false);
+    setPlatform("linkedin");
+    setVoice(emptyVoiceState);
+    setScheduleOpen(false);
+    setScheduledAt("");
+    setLoadingScore(false);
+    setRewriteLoading(false);
+
+    if (postId) {
+      router.replace("/compose");
+    }
+  }
+
+  function showSuccessCard(state: ComposeSuccessState) {
+    clearComposeState();
+    setSuccessState(state);
+  }
+
+  function resetToEditor() {
+    if (successTimerRef.current) {
+      clearTimeout(successTimerRef.current);
+    }
+    setSuccessState(null);
+    clearComposeState();
   }
 
   const countLabel = useMemo(() => {
@@ -193,7 +254,7 @@ export function ComposeClient() {
     return `${content.length} / 280`;
   }, [content.length, platform]);
 
-  const selectedPlatforms = useMemo(() => {
+  const selectedPlatforms = useMemo<PublishPlatform[]>(() => {
     if (platform === "both") return ["linkedin", "twitter"];
     return [platform];
   }, [platform]);
@@ -250,15 +311,19 @@ export function ComposeClient() {
   async function scheduleCurrentPost() {
     setSaving(true);
     try {
+      const scheduledFor = scheduledAt;
       await saveOrUpdatePost({
         content,
         platforms: selectedPlatforms,
         firstComment: supportsFirstComment ? firstComment.trim() || null : null,
-        scheduledAt,
+        scheduledAt: scheduledFor,
         status: "scheduled",
       });
       setScheduleOpen(false);
-      toast.success(`Post scheduled for ${format(new Date(scheduledAt), "PPP p")}.`);
+      showSuccessCard({
+        kind: "scheduled",
+        scheduledAt: scheduledFor,
+      });
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Unable to schedule post");
     } finally {
@@ -282,11 +347,10 @@ export function ComposeClient() {
       if (!response.ok) {
         throw new Error(await readResponseError(response, "Unable to publish post"));
       }
-      toast.success(
-        supportsFirstComment && Boolean(firstComment.trim())
-          ? "Post published and first comment added ✓"
-          : "Post published."
-      );
+      showSuccessCard({
+        kind: "published",
+        platforms: selectedPlatforms,
+      });
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Unable to publish post", {
         action: {
@@ -345,6 +409,35 @@ export function ComposeClient() {
         </p>
       </div>
 
+      {successState ? (
+        <div className="quill-card bg-brand-light px-6 py-12 text-center">
+          <div className="mx-auto max-w-xl">
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-white">
+              <Check className="h-8 w-8 text-brand" />
+            </div>
+            <h2 className="mt-6 text-3xl font-semibold text-ink">
+              {successState.kind === "published"
+                ? `Published to ${formatPlatformLabel(successState.platforms)} ✓`
+                : "Scheduled ✓"}
+            </h2>
+            <p className="mt-3 text-base text-muted">
+              {successState.kind === "published"
+                ? "Your post is live. Keep the momentum going."
+                : `Your post will go live on ${format(new Date(successState.scheduledAt), "EEEE, MMMM d 'at' p")}.`}
+            </p>
+            <div className="mt-8 flex flex-wrap justify-center gap-3">
+              <Button onClick={resetToEditor}>Compose next post</Button>
+              <button
+                type="button"
+                onClick={() => router.push("/scheduled")}
+                className="inline-flex h-10 items-center justify-center rounded-md border border-brand/20 bg-white px-4 text-sm font-medium text-brand transition hover:bg-brand-light"
+              >
+                View in Scheduled
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : (
       <div className="grid gap-6 xl:grid-cols-[1.6fr_0.9fr]">
         <div className="quill-card p-6">
           <div className="flex flex-wrap gap-2">
@@ -561,6 +654,7 @@ export function ComposeClient() {
           )}
         </div>
       </div>
+      )}
     </section>
   );
 }
