@@ -14,7 +14,12 @@ import {
 import { PlanLimitError, assertFreePlanPostLimit, assertPlanAllowsPlatforms } from "@/lib/plans";
 import { prisma } from "@/lib/prisma";
 import { syncPostDeliveries } from "@/lib/publishing";
+import {
+  AUTO_SCHEDULING_ENABLED,
+  AUTO_SCHEDULING_UNAVAILABLE_MESSAGE,
+} from "@/lib/scheduling";
 import { scoreVoiceTextForUser, toStoredVoiceFields } from "@/lib/voice-dna";
+import { readRequestJson } from "@/lib/utils";
 
 const platformSchema = z.enum(["linkedin", "twitter"]);
 const carouselSlideSchema = z.object({
@@ -124,7 +129,12 @@ export async function POST(request: NextRequest) {
     return user;
   }
 
-  const parsed = createPostSchema.safeParse(await request.json());
+  const body = await readRequestJson<unknown>(request);
+  if (!body.ok) {
+    return NextResponse.json({ error: body.error }, { status: 400 });
+  }
+
+  const parsed = createPostSchema.safeParse(body.data);
   if (!parsed.success) {
     return NextResponse.json(
       {
@@ -145,6 +155,20 @@ export async function POST(request: NextRequest) {
   }
 
   const scheduledAt = parsed.data.scheduledAt ? new Date(parsed.data.scheduledAt) : null;
+  if (scheduledAt && scheduledAt.getTime() <= Date.now()) {
+    return NextResponse.json(
+      { error: "Scheduled time must be in the future" },
+      { status: 400 }
+    );
+  }
+
+  if (scheduledAt && !AUTO_SCHEDULING_ENABLED) {
+    return NextResponse.json(
+      { error: AUTO_SCHEDULING_UNAVAILABLE_MESSAGE },
+      { status: 409 }
+    );
+  }
+
   const status = scheduledAt ? "scheduled" : "draft";
   const firstComment = parsed.data.platforms.includes("linkedin")
     ? parsed.data.firstComment?.trim() || null

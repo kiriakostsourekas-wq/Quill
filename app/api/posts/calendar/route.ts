@@ -35,6 +35,13 @@ export async function GET(request: NextRequest) {
   const from = new Date(parsed.data.from);
   const to = new Date(parsed.data.to);
 
+  if (from.getTime() > to.getTime()) {
+    return NextResponse.json(
+      { error: "from must be earlier than to" },
+      { status: 400 }
+    );
+  }
+
   const posts = await prisma.post.findMany({
     where: {
       userId: user.id,
@@ -63,6 +70,11 @@ export async function GET(request: NextRequest) {
       scheduledAt: true,
       publishedAt: true,
       voiceScore: true,
+      voiceToneScore: true,
+      voiceRhythmScore: true,
+      voiceWordChoiceScore: true,
+      voiceFeedback: true,
+      voiceSafeToPublish: true,
       firstComment: true,
       documentTitle: true,
     },

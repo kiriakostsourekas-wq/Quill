@@ -1,6 +1,6 @@
 # Quill Product App
 
-Quill is a Next.js 14 SaaS application for voice-aware social publishing. Users can connect LinkedIn and X, train a Voice DNA profile, draft and schedule posts, and manage billing with Stripe.
+Quill is a Next.js 14 SaaS application for voice-aware social publishing. Users can connect LinkedIn and X, train a Voice DNA profile, draft and schedule posts, and use the full product free during beta.
 
 ## Stack
 
@@ -9,7 +9,7 @@ Quill is a Next.js 14 SaaS application for voice-aware social publishing. Users 
 - Tailwind CSS
 - Prisma + Supabase Postgres
 - Groq for Voice DNA analysis and rewrite flows
-- Stripe for billing
+- Stripe code is retained for future billing reactivation, but billing is currently disabled during beta
 - Resend for onboarding welcome email
 - Vercel Cron Jobs for scheduled publishing
 

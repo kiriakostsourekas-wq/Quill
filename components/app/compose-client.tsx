@@ -2,17 +2,29 @@
 
 import Link from "next/link";
 import { format } from "date-fns";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { Check, X } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Check, Loader2, X } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
+import { KeyboardHint } from "@/components/app/keyboard-hint";
 import { IdeasClient } from "@/components/app/ideas-client";
+import { VoiceDnaPanel } from "@/components/app/voice-dna-panel";
+import { VoiceScoreBadge } from "@/components/app/voice-score-badge";
 import { Button } from "@/components/ui/button";
+import {
+  AUTO_SCHEDULING_ENABLED,
+  AUTO_SCHEDULING_UNAVAILABLE_MESSAGE,
+} from "@/lib/scheduling";
 
 type VoiceScore = {
   score: number | null;
+  toneScore: number | null;
+  rhythmScore: number | null;
+  wordChoiceScore: number | null;
   feedback: string;
   tip: string;
+  signaturePhrases: string[];
+  safeToPublish: boolean;
   weakestSentence: string;
   suggestions: string[];
   traits: string[];
@@ -39,8 +51,13 @@ const platformTabs: { label: string; value: PlatformMode }[] = [
 
 const emptyVoiceState: VoiceScore = {
   score: null,
+  toneScore: null,
+  rhythmScore: null,
+  wordChoiceScore: null,
   feedback: "Start writing to score your post.",
   tip: "",
+  signaturePhrases: [],
+  safeToPublish: false,
   weakestSentence: "",
   suggestions: [],
   traits: [],
@@ -120,28 +137,51 @@ export function ComposeClient() {
   const [rewriteLoading, setRewriteLoading] = useState(false);
   const [successState, setSuccessState] = useState<ComposeSuccessState | null>(null);
   const [showIdeaBanner, setShowIdeaBanner] = useState(false);
+  const [animateScore, setAnimateScore] = useState(false);
+  const [loadingExistingPost, setLoadingExistingPost] = useState(Boolean(postId));
+  const [loadPostError, setLoadPostError] = useState<string | null>(null);
   const debounceRef = useRef<NodeJS.Timeout | null>(null);
   const successTimerRef = useRef<NodeJS.Timeout | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const highlightRef = useRef<HTMLDivElement | null>(null);
+  const shortcutModifier = useMemo(
+    () => (typeof navigator !== "undefined" && /(Mac|iPhone|iPad)/i.test(navigator.platform) ? "⌘" : "Ctrl"),
+    []
+  );
 
-  async function readResponseError(response: Response, fallback: string) {
+  const readResponseError = useCallback(async (response: Response, fallback: string) => {
     try {
       const data = await response.json();
       return data.error ?? fallback;
     } catch {
       return fallback;
     }
-  }
+  }, []);
 
   useEffect(() => {
-    if (!postId) return;
+    if (!postId) {
+      setLoadingExistingPost(false);
+      setLoadPostError(null);
+      return;
+    }
+
+    let cancelled = false;
+    setLoadingExistingPost(true);
+    setLoadPostError(null);
 
     fetch("/api/posts")
-      .then((response) => response.json())
+      .then(async (response) => {
+        if (!response.ok) {
+          throw new Error(await readResponseError(response, "Unable to load this draft"));
+        }
+        return response.json();
+      })
       .then((data) => {
+        if (cancelled) return;
         const post = (data.posts ?? []).find((item: { id: string }) => item.id === postId);
-        if (!post) return;
+        if (!post) {
+          throw new Error("This draft no longer exists or you no longer have access to it.");
+        }
         setContent(post.content ?? "");
         setFirstComment(post.firstComment ?? "");
         setFirstCommentOpen(Boolean(post.firstComment));
@@ -156,8 +196,19 @@ export function ComposeClient() {
               : "twitter";
         setPlatform(mode);
       })
-      .catch(() => undefined);
-  }, [postId]);
+      .catch((error) => {
+        if (cancelled) return;
+        setLoadPostError(error instanceof Error ? error.message : "Unable to load this draft");
+      })
+      .finally(() => {
+        if (cancelled) return;
+        setLoadingExistingPost(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [postId, readResponseError]);
 
   useEffect(() => {
     if (postId || !ideaPrefill) {
@@ -171,7 +222,7 @@ export function ComposeClient() {
   }, [ideaPrefill, postId]);
 
   useEffect(() => {
-    if (postId || !scheduledAtPrefill) return;
+    if (postId || !scheduledAtPrefill || !AUTO_SCHEDULING_ENABLED) return;
 
     const prefillDate = new Date(scheduledAtPrefill);
     if (Number.isNaN(prefillDate.getTime())) return;
@@ -196,13 +247,24 @@ export function ComposeClient() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ text: content }),
         });
-        const result = await response.json();
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(result.error ?? "Unable to score this draft right now.");
+        }
         setVoice(result);
-      } catch {
+      } catch (error) {
         setVoice({
           score: null,
-          feedback: "Unable to score this draft right now.",
+          toneScore: null,
+          rhythmScore: null,
+          wordChoiceScore: null,
+          feedback:
+            error instanceof Error
+              ? error.message
+              : "Unable to score this draft right now.",
           tip: "",
+          signaturePhrases: [],
+          safeToPublish: false,
           weakestSentence: "",
           suggestions: [],
           traits: [],
@@ -216,6 +278,14 @@ export function ComposeClient() {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
   }, [content]);
+
+  useEffect(() => {
+    if (voice.score == null) return;
+
+    setAnimateScore(true);
+    const timeout = setTimeout(() => setAnimateScore(false), 450);
+    return () => clearTimeout(timeout);
+  }, [voice.score, voice.toneScore, voice.rhythmScore, voice.wordChoiceScore]);
 
   useEffect(() => {
     if (!successState) return;
@@ -242,7 +312,7 @@ export function ComposeClient() {
     return platforms[0] === "twitter" ? "X" : "LinkedIn";
   }
 
-  function clearComposeState() {
+  const clearComposeState = useCallback(() => {
     if (successTimerRef.current) {
       clearTimeout(successTimerRef.current);
     }
@@ -261,20 +331,20 @@ export function ComposeClient() {
     if (postId || scheduledAtPrefill || ideaPrefill) {
       router.replace("/compose");
     }
-  }
+  }, [ideaPrefill, postId, router, scheduledAtPrefill]);
 
-  function showSuccessCard(state: ComposeSuccessState) {
+  const showSuccessCard = useCallback((state: ComposeSuccessState) => {
     clearComposeState();
     setSuccessState(state);
-  }
+  }, [clearComposeState]);
 
-  function resetToEditor() {
+  const resetToEditor = useCallback(() => {
     if (successTimerRef.current) {
       clearTimeout(successTimerRef.current);
     }
     setSuccessState(null);
     clearComposeState();
-  }
+  }, [clearComposeState]);
 
   function dismissIdeaBanner() {
     setShowIdeaBanner(false);
@@ -301,18 +371,19 @@ export function ComposeClient() {
   const showVoiceProfile = Boolean(voice.traits && voice.traits.length > 0);
   const shouldHighlightWeakest =
     showVoiceProfile && Boolean(content.trim()) && Boolean(voice.weakestSentence.trim());
+  const canSubmit = Boolean(content.trim()) && !loadingExistingPost && !loadPostError;
   const highlightMarkup = useMemo(
     () => buildHighlightMarkup(content, voice.weakestSentence),
     [content, voice.weakestSentence]
   );
 
-  async function saveOrUpdatePost(payload: {
+  const saveOrUpdatePost = useCallback(async (payload: {
     content: string;
     platforms: string[];
     firstComment?: string | null;
     scheduledAt?: string | null;
     status?: "draft" | "scheduled";
-  }) {
+  }) => {
     const isEditing = Boolean(postId);
     const endpoint = isEditing ? `/api/posts/${postId}` : "/api/posts";
     const method = isEditing ? "PATCH" : "POST";
@@ -326,9 +397,9 @@ export function ComposeClient() {
     if (!response.ok) {
       throw new Error(await readResponseError(response, "Unable to save post"));
     }
-  }
+  }, [postId, readResponseError]);
 
-  async function saveDraft() {
+  const saveDraft = useCallback(async () => {
     setSaving(true);
     try {
       await saveOrUpdatePost({
@@ -344,9 +415,9 @@ export function ComposeClient() {
     } finally {
       setSaving(false);
     }
-  }
+  }, [content, firstComment, saveOrUpdatePost, selectedPlatforms, supportsFirstComment]);
 
-  async function scheduleCurrentPost() {
+  const scheduleCurrentPost = useCallback(async () => {
     setSaving(true);
     try {
       const scheduledFor = scheduledAt;
@@ -367,9 +438,9 @@ export function ComposeClient() {
     } finally {
       setSaving(false);
     }
-  }
+  }, [content, firstComment, saveOrUpdatePost, scheduledAt, selectedPlatforms, showSuccessCard, supportsFirstComment]);
 
-  async function publishNow() {
+  const publishNow = useCallback(async () => {
     setPublishing(true);
     try {
       const response = await fetch("/api/publish/now", {
@@ -401,7 +472,15 @@ export function ComposeClient() {
     } finally {
       setPublishing(false);
     }
-  }
+  }, [
+    content,
+    firstComment,
+    postId,
+    readResponseError,
+    selectedPlatforms,
+    showSuccessCard,
+    supportsFirstComment,
+  ]);
 
   async function rewriteInVoice() {
     setRewriteLoading(true);
@@ -435,8 +514,52 @@ export function ComposeClient() {
     }
   }
 
-  const score = voice.score ?? 0;
-  const ringOffset = 339 - (339 * score) / 100;
+  useEffect(() => {
+    const isMac = typeof navigator !== "undefined" && /(Mac|iPhone|iPad)/i.test(navigator.platform);
+    const modifierKey = isMac ? "metaKey" : "ctrlKey";
+
+    function handleKeyDown(event: KeyboardEvent) {
+      const hasModifier = modifierKey === "metaKey" ? event.metaKey : event.ctrlKey;
+
+      if (!hasModifier) {
+        return;
+      }
+
+      if (event.key.toLowerCase() === "s") {
+        event.preventDefault();
+        if (!saving) {
+          void saveDraft();
+        }
+        return;
+      }
+
+      if (event.key === "Enter") {
+        event.preventDefault();
+
+        if (scheduleOpen) {
+          if (!saving && scheduledAt) {
+            void scheduleCurrentPost();
+          }
+          return;
+        }
+
+        if (!publishing) {
+          void publishNow();
+        }
+      }
+    }
+
+    function handleEscape() {
+      setScheduleOpen(false);
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("quill:escape", handleEscape as EventListener);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("quill:escape", handleEscape as EventListener);
+    };
+  }, [publishNow, publishing, saveDraft, saving, scheduleCurrentPost, scheduleOpen, scheduledAt]);
 
   return (
     <section className="space-y-6">
@@ -478,6 +601,27 @@ export function ComposeClient() {
       ) : (
       <div className="grid gap-6 xl:grid-cols-[1.6fr_0.9fr]">
         <div className="quill-card p-6">
+          {loadingExistingPost ? (
+            <div className="flex min-h-[420px] flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-line bg-slate-50 text-center">
+              <Loader2 className="h-6 w-6 animate-spin text-brand" />
+              <div>
+                <p className="font-medium text-ink">Loading draft…</p>
+                <p className="mt-1 text-sm text-muted">Pulling the latest saved version before editing.</p>
+              </div>
+            </div>
+          ) : loadPostError ? (
+            <div className="rounded-xl border border-red-200 bg-red-50 px-5 py-6">
+              <p className="font-medium text-red-700">Unable to load this draft</p>
+              <p className="mt-2 text-sm text-red-600">{loadPostError}</p>
+              <div className="mt-4 flex flex-wrap gap-3">
+                <Button variant="outline" onClick={() => router.push("/scheduled")}>
+                  Back to Scheduled
+                </Button>
+                <Button onClick={() => router.replace("/compose")}>Start fresh</Button>
+              </div>
+            </div>
+          ) : (
+          <>
           <div className="flex flex-wrap gap-2">
             {platformTabs.map((tab) => (
               <button
@@ -493,6 +637,23 @@ export function ComposeClient() {
                 {tab.label}
               </button>
             ))}
+          </div>
+
+          <div className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-line bg-slate-50 px-4 py-3">
+            <div>
+              <p className="text-sm font-semibold text-ink">Draft Studio</p>
+              <p className="mt-1 text-xs text-muted">
+                Watch your Voice DNA score update as the draft sharpens.
+              </p>
+            </div>
+            <VoiceScoreBadge
+              score={voice.score}
+              toneScore={voice.toneScore}
+              rhythmScore={voice.rhythmScore}
+              wordChoiceScore={voice.wordChoiceScore}
+              safeToPublish={voice.safeToPublish}
+              animate={animateScore}
+            />
           </div>
 
           {showIdeaBanner && (
@@ -574,14 +735,26 @@ export function ComposeClient() {
           )}
 
           <div className="mt-5 flex flex-wrap gap-3">
-            <Button variant="outline" onClick={saveDraft} disabled={saving}>
-              {saving ? "Saving..." : "Save draft"}
+            <Button variant="outline" onClick={saveDraft} disabled={saving || !canSubmit} className="gap-2">
+              <span>{saving ? "Saving..." : "Save draft"}</span>
+              {!saving && <KeyboardHint keys={`${shortcutModifier}S`} />}
             </Button>
-            <Button onClick={() => setScheduleOpen(true)}>Schedule post</Button>
-            <Button variant="outline" onClick={publishNow} disabled={publishing}>
-              {publishing ? "Publishing..." : "Publish now"}
+            <Button
+              onClick={() => setScheduleOpen(true)}
+              disabled={!canSubmit || !AUTO_SCHEDULING_ENABLED}
+            >
+              Schedule post
+            </Button>
+            <Button variant="outline" onClick={publishNow} disabled={publishing || !canSubmit} className="gap-2">
+              <span>{publishing ? "Publishing..." : "Publish now"}</span>
+              {!publishing && <KeyboardHint keys={`${shortcutModifier}↵`} />}
             </Button>
           </div>
+          {!AUTO_SCHEDULING_ENABLED && (
+            <p className="mt-3 text-sm text-muted">
+              {AUTO_SCHEDULING_UNAVAILABLE_MESSAGE}
+            </p>
+          )}
 
           {scheduleOpen && (
             <div className="mt-5 rounded-xl border border-line bg-slate-50 p-4">
@@ -608,105 +781,24 @@ export function ComposeClient() {
               </div>
             </div>
           )}
-        </div>
-
-        <div className="quill-card p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-lg font-semibold text-ink">Voice DNA Score</h2>
-              <p className="mt-1 text-sm text-muted">
-                {loadingScore ? "Scoring..." : "How closely this draft matches your voice."}
-              </p>
-            </div>
-          </div>
-
-          <div className="mt-8 flex justify-center">
-            <svg className="h-32 w-32 -rotate-90" viewBox="0 0 120 120">
-              <circle cx="60" cy="60" r="54" stroke="#E5E7EB" strokeWidth="10" fill="none" />
-              <circle
-                cx="60"
-                cy="60"
-                r="54"
-                stroke="#534AB7"
-                strokeWidth="10"
-                strokeLinecap="round"
-                fill="none"
-                strokeDasharray="339"
-                strokeDashoffset={ringOffset}
-              />
-              <text
-                x="60"
-                y="66"
-                textAnchor="middle"
-                className="rotate-90 fill-[#1A1A1A] text-[22px] font-semibold"
-                transform="rotate(90 60 60)"
-              >
-                {voice.score ?? "--"}
-              </text>
-            </svg>
-          </div>
-
-          {showVoiceProfile ? (
-            <>
-              <div className="mt-6 flex flex-wrap gap-2">
-                {voice.traits.slice(0, 3).map((trait) => (
-                  <span
-                    key={trait}
-                    className="rounded-full bg-brand-light px-3 py-1 text-xs font-medium text-brand"
-                  >
-                    {trait}
-                  </span>
-                ))}
-              </div>
-
-              <p className="mt-4 text-sm leading-6 text-muted">{voice.feedback}</p>
-              {voice.tip && <p className="mt-2 text-sm leading-6 text-muted">{voice.tip}</p>}
-
-              {voice.suggestions.length > 0 && (
-                <ol className="mt-5 space-y-3">
-                  {voice.suggestions.map((suggestion, index) => (
-                    <li
-                      key={`${index}-${suggestion}`}
-                      className="flex items-start justify-between gap-3 rounded-lg border border-line px-3 py-3"
-                    >
-                      <div className="flex gap-3 text-sm leading-6 text-muted">
-                        <span className="font-medium text-ink">{index + 1}.</span>
-                        <span>{suggestion}</span>
-                      </div>
-                      <Button
-                        variant="outline"
-                        className="shrink-0 px-3 py-1 text-xs"
-                        onClick={() =>
-                          setContent((current) =>
-                            replaceWeakestSentence(current, voice.weakestSentence, suggestion)
-                          )
-                        }
-                      >
-                        Apply
-                      </Button>
-                    </li>
-                  ))}
-                </ol>
-              )}
-
-              <Button
-                variant="outline"
-                className="mt-5 w-full"
-                onClick={rewriteInVoice}
-                disabled={rewriteLoading}
-              >
-                {rewriteLoading ? "Rewriting..." : "Rewrite in my voice →"}
-              </Button>
-            </>
-          ) : (
-            <div className="mt-6 rounded-xl border border-dashed border-brand/30 bg-brand-light/40 p-4 text-sm leading-6 text-muted">
-              Set up Voice DNA to unlock scoring.{" "}
-              <Link href="/voice-dna" className="font-medium text-brand hover:underline">
-                Go to Voice DNA
-              </Link>
-            </div>
+          </>
           )}
         </div>
+
+        {!loadingExistingPost && !loadPostError && (
+          <VoiceDnaPanel
+            voice={voice}
+            loadingScore={loadingScore}
+            rewriteLoading={rewriteLoading}
+            animateScore={animateScore}
+            onRewrite={rewriteInVoice}
+            onApplySuggestion={(suggestion) =>
+              setContent((current) =>
+                replaceWeakestSentence(current, voice.weakestSentence, suggestion)
+              )
+            }
+          />
+        )}
       </div>
       )}
 

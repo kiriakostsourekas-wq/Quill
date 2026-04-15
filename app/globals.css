@@ -5,6 +5,32 @@
 @layer base {
   :root {
     color-scheme: light;
+    --color-brand: 83 74 183;
+    --color-brand-light: 238 237 254;
+    --color-canvas: 249 249 249;
+    --color-ink: 26 26 26;
+    --color-muted: 107 114 128;
+    --color-line: 229 231 235;
+    --color-surface: 255 255 255;
+    --color-surface-muted: 248 250 252;
+    --color-surface-soft: 241 245 249;
+    --color-skeleton: 226 232 240;
+    --shadow-soft: 0 1px 2px rgba(17, 24, 39, 0.04);
+  }
+
+  .dark {
+    color-scheme: dark;
+    --color-brand: 144 132 255;
+    --color-brand-light: 52 48 94;
+    --color-canvas: 10 14 22;
+    --color-ink: 241 245 249;
+    --color-muted: 148 163 184;
+    --color-line: 43 53 72;
+    --color-surface: 17 24 39;
+    --color-surface-muted: 22 31 48;
+    --color-surface-soft: 30 41 59;
+    --color-skeleton: 51 65 85;
+    --shadow-soft: 0 16px 36px rgba(2, 6, 23, 0.28);
   }
 
   * {
@@ -16,21 +42,54 @@
   }
 
   body {
-    @apply bg-canvas text-ink antialiased;
+    @apply bg-canvas text-ink antialiased transition-colors duration-300;
   }
 
   a {
     @apply text-inherit no-underline;
   }
+
+  .dark .bg-white {
+    background-color: rgb(var(--color-surface)) !important;
+  }
+
+  .dark .bg-slate-50,
+  .dark .bg-slate-50\/70,
+  .dark .bg-slate-50\/50 {
+    background-color: rgb(var(--color-surface-muted)) !important;
+  }
+
+  .dark .bg-slate-100 {
+    background-color: rgb(var(--color-surface-soft)) !important;
+  }
+
+  .dark .bg-slate-200 {
+    background-color: rgb(var(--color-skeleton)) !important;
+  }
+
+  .dark .text-black,
+  .dark .text-slate-500,
+  .dark .text-slate-600,
+  .dark .text-slate-700 {
+    color: rgb(var(--color-muted)) !important;
+  }
+
+  .dark .border-white\/10 {
+    border-color: rgb(var(--color-line) / 0.55) !important;
+  }
+
+  .dark .ring-line {
+    --tw-ring-color: rgb(var(--color-line) / 0.7) !important;
+  }
 }
 
 @layer components {
   .quill-card {
-    @apply rounded-xl border border-line bg-white shadow-soft;
+    @apply rounded-xl border border-line bg-surface shadow-soft transition-colors duration-300;
   }
 
   .quill-input {
-    @apply w-full rounded-md border border-line bg-white px-3 py-2 text-sm text-ink outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/10;
+    @apply w-full rounded-md border border-line bg-surface px-3 py-2 text-sm text-ink outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/10;
   }
 
   .quill-textarea {

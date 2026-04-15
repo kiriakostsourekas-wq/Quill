@@ -54,8 +54,13 @@ model Post {
   platforms            String[]
   status               String              @default("draft")
   voiceScore           Int?
+  voiceToneScore       Int?
+  voiceRhythmScore     Int?
+  voiceWordChoiceScore Int?
   voiceFeedback        String?
   voiceTip             String?
+  voiceSignaturePhrases String[]           @default([])
+  voiceSafeToPublish   Boolean?
   voiceWeakestSentence String?
   voiceSuggestions     String[]            @default([])
   lastVoiceScoredAt    DateTime?

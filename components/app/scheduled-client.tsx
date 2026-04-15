@@ -6,7 +6,12 @@ import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { PlatformBadge } from "@/components/app/platform-badge";
+import {
+  AUTO_SCHEDULING_ENABLED,
+  AUTO_SCHEDULING_UNAVAILABLE_MESSAGE,
+} from "@/lib/scheduling";
 import { StatusBadge } from "@/components/app/status-badge";
+import { VoiceScoreBadge } from "@/components/app/voice-score-badge";
 
 type DeliveryRecord = {
   platform: string;
@@ -26,6 +31,11 @@ type PostRecord = {
   status: string;
   scheduledAt?: string | null;
   createdAt: string;
+  voiceScore?: number | null;
+  voiceToneScore?: number | null;
+  voiceRhythmScore?: number | null;
+  voiceWordChoiceScore?: number | null;
+  voiceSafeToPublish?: boolean | null;
   deliveries?: DeliveryRecord[];
 };
 
@@ -128,6 +138,12 @@ export function ScheduledClient() {
         </p>
       </div>
 
+      {!AUTO_SCHEDULING_ENABLED && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
+          {AUTO_SCHEDULING_UNAVAILABLE_MESSAGE} Existing scheduled posts will stay queued until scheduling is enabled.
+        </div>
+      )}
+
       <div className="flex flex-wrap gap-2">
         {filters.map((filter) => (
           <button
@@ -184,6 +200,14 @@ export function ScheduledClient() {
                       <PlatformBadge key={`${post.id}-${platform}`} platform={platform} />
                     ))}
                     <StatusBadge value={post.status} />
+                    <VoiceScoreBadge
+                      score={post.voiceScore}
+                      toneScore={post.voiceToneScore}
+                      rhythmScore={post.voiceRhythmScore}
+                      wordChoiceScore={post.voiceWordChoiceScore}
+                      safeToPublish={post.voiceSafeToPublish}
+                      variant="compact"
+                    />
                   </div>
                 </div>
 

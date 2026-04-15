@@ -26,7 +26,9 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { PlatformBadge } from "@/components/app/platform-badge";
+import { AUTO_SCHEDULING_ENABLED } from "@/lib/scheduling";
 import { StatusBadge } from "@/components/app/status-badge";
+import { VoiceScoreBadge } from "@/components/app/voice-score-badge";
 
 type CalendarView = "month" | "week";
 
@@ -40,6 +42,11 @@ type CalendarPost = {
   scheduledAt?: string | null;
   publishedAt?: string | null;
   voiceScore?: number | null;
+  voiceToneScore?: number | null;
+  voiceRhythmScore?: number | null;
+  voiceWordChoiceScore?: number | null;
+  voiceFeedback?: string | null;
+  voiceSafeToPublish?: boolean | null;
   firstComment?: string | null;
 };
 
@@ -53,13 +60,6 @@ type CalendarEvent = {
 const weekdayLabels = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const weekHours = Array.from({ length: 18 }, (_, index) => 6 + index);
 const hourSlotHeight = 72;
-
-function scoreDotClass(score?: number | null) {
-  if (score == null) return "bg-slate-300";
-  if (score > 80) return "bg-emerald-500";
-  if (score >= 60) return "bg-amber-400";
-  return "bg-red-500";
-}
 
 function platformDotClass(platform: string) {
   return platform === "linkedin" ? "bg-[#0A66C2]" : "bg-black";
@@ -213,7 +213,11 @@ export function CalendarClient() {
 
   function openComposeForDate(date: Date) {
     const scheduledAt = set(startOfDay(date), { hours: 9, minutes: 0 });
-    router.push(`/compose?scheduledAt=${encodeURIComponent(scheduledAt.toISOString())}`);
+    router.push(
+      AUTO_SCHEDULING_ENABLED
+        ? `/compose?scheduledAt=${encodeURIComponent(scheduledAt.toISOString())}`
+        : "/compose"
+    );
   }
 
   async function deletePost(post: CalendarPost) {
@@ -268,8 +272,20 @@ export function CalendarClient() {
               }}
               className="flex w-full items-center gap-2 rounded-lg border border-line bg-slate-50 px-2 py-2 text-left text-xs text-ink transition hover:border-brand/30 hover:bg-white"
             >
-              <span className={`h-2 w-2 rounded-full ${scoreDotClass(event.post.voiceScore)}`} />
-              <span className="min-w-0 flex-1 truncate">{truncateLabel(getDisplayText(event.post))}</span>
+              <div className="min-w-0 flex-1">
+                <span className="block truncate">{truncateLabel(getDisplayText(event.post))}</span>
+                <div className="mt-1">
+                  <VoiceScoreBadge
+                    score={event.post.voiceScore}
+                    toneScore={event.post.voiceToneScore}
+                    rhythmScore={event.post.voiceRhythmScore}
+                    wordChoiceScore={event.post.voiceWordChoiceScore}
+                    safeToPublish={event.post.voiceSafeToPublish}
+                    variant="compact"
+                    className="origin-left scale-[0.8]"
+                  />
+                </div>
+              </div>
               {event.kind === "published" && (
                 <span className="text-[10px] font-medium uppercase tracking-[0.08em] text-emerald-600">
                   Published
@@ -308,10 +324,20 @@ export function CalendarClient() {
         }}
       >
         <div className="flex items-center gap-2">
-          <span className={`h-2 w-2 rounded-full ${scoreDotClass(event.post.voiceScore)}`} />
           <span className="truncate text-sm font-medium text-ink">
             {truncateLabel(getDisplayText(event.post), 40)}
           </span>
+        </div>
+        <div className="mt-2">
+          <VoiceScoreBadge
+            score={event.post.voiceScore}
+            toneScore={event.post.voiceToneScore}
+            rhythmScore={event.post.voiceRhythmScore}
+            wordChoiceScore={event.post.voiceWordChoiceScore}
+            safeToPublish={event.post.voiceSafeToPublish}
+            variant="compact"
+            className="origin-left scale-[0.88]"
+          />
         </div>
         <div className="mt-2 flex items-center justify-between text-[11px] text-muted">
           <span>{event.kind === "published" ? "Published" : format(event.date, "p")}</span>
@@ -507,15 +533,22 @@ export function CalendarClient() {
                 <PlatformBadge key={`${selectedPost.id}-${platform}`} platform={platform} />
               ))}
               <StatusBadge value={selectedPost.status} />
-              <span
-                className={`inline-flex items-center gap-2 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700`}
-              >
-                <span className={`h-2 w-2 rounded-full ${scoreDotClass(selectedPost.voiceScore)}`} />
-                Voice score {selectedPost.voiceScore ?? "—"}
-              </span>
+              <VoiceScoreBadge
+                score={selectedPost.voiceScore}
+                toneScore={selectedPost.voiceToneScore}
+                rhythmScore={selectedPost.voiceRhythmScore}
+                wordChoiceScore={selectedPost.voiceWordChoiceScore}
+                safeToPublish={selectedPost.voiceSafeToPublish}
+              />
             </div>
 
             <div className="mt-6 space-y-4">
+              {selectedPost.voiceFeedback && (
+                <div className="rounded-xl border border-line bg-slate-50 p-4">
+                  <p className="text-sm font-medium text-ink">Voice DNA summary</p>
+                  <p className="mt-2 text-sm leading-6 text-muted">{selectedPost.voiceFeedback}</p>
+                </div>
+              )}
               <div className="rounded-xl border border-line p-4">
                 <p className="text-sm text-muted">Scheduled time</p>
                 <p className="mt-1 font-medium text-ink">

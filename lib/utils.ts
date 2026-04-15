@@ -35,3 +35,17 @@ export function splitVoiceSamples(raw: string) {
     .map((sample) => sample.trim())
     .filter(Boolean);
 }
+
+export async function readRequestJson<T>(request: Request) {
+  try {
+    return {
+      ok: true as const,
+      data: (await request.json()) as T,
+    };
+  } catch {
+    return {
+      ok: false as const,
+      error: "Invalid JSON body",
+    };
+  }
+}

@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { PlatformBadge } from "@/components/app/platform-badge";
 import { StatusBadge } from "@/components/app/status-badge";
+import { VoiceScoreBadge } from "@/components/app/voice-score-badge";
 
 type PostRecord = {
   id: string;
@@ -14,6 +15,11 @@ type PostRecord = {
   platforms: string[];
   status: string;
   createdAt: string;
+  voiceScore?: number | null;
+  voiceToneScore?: number | null;
+  voiceRhythmScore?: number | null;
+  voiceWordChoiceScore?: number | null;
+  voiceSafeToPublish?: boolean | null;
 };
 
 export function DashboardClient() {
@@ -21,12 +27,25 @@ export function DashboardClient() {
   const searchParams = useSearchParams();
   const [posts, setPosts] = useState<PostRecord[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
     fetch("/api/posts")
-      .then((response) => response.json())
-      .then((data) => setPosts(data.posts ?? []))
-      .catch(() => setPosts([]))
+      .then(async (response) => {
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(data.error ?? "Unable to load dashboard data");
+        }
+        return data;
+      })
+      .then((data) => {
+        setPosts(data.posts ?? []);
+        setLoadError(null);
+      })
+      .catch((error) => {
+        setPosts([]);
+        setLoadError(error instanceof Error ? error.message : "Unable to load dashboard data");
+      })
       .finally(() => setLoading(false));
   }, []);
 
@@ -87,6 +106,7 @@ export function DashboardClient() {
             <thead className="bg-slate-50 text-left text-muted">
               <tr>
                 <th className="px-5 py-3 font-medium">Content preview</th>
+                <th className="px-5 py-3 font-medium">Voice DNA</th>
                 <th className="px-5 py-3 font-medium">Platforms</th>
                 <th className="px-5 py-3 font-medium">Status</th>
                 <th className="px-5 py-3 font-medium">Date</th>
@@ -100,6 +120,9 @@ export function DashboardClient() {
                       <div className="h-4 w-full animate-pulse rounded bg-slate-200" />
                     </td>
                     <td className="px-5 py-4">
+                      <div className="h-8 w-44 animate-pulse rounded-full bg-slate-200" />
+                    </td>
+                    <td className="px-5 py-4">
                       <div className="h-4 w-24 animate-pulse rounded bg-slate-200" />
                     </td>
                     <td className="px-5 py-4">
@@ -110,10 +133,17 @@ export function DashboardClient() {
                     </td>
                   </tr>
                 ))}
-              {!loading && recentPosts.length === 0 && (
+              {!loading && !loadError && recentPosts.length === 0 && (
                 <tr>
-                  <td className="px-5 py-8 text-muted" colSpan={4}>
+                  <td className="px-5 py-8 text-muted" colSpan={5}>
                     No posts yet.
+                  </td>
+                </tr>
+              )}
+              {!loading && loadError && (
+                <tr>
+                  <td className="px-5 py-8 text-muted" colSpan={5}>
+                    {loadError}
                   </td>
                 </tr>
               )}
@@ -121,6 +151,16 @@ export function DashboardClient() {
                 <tr key={post.id}>
                   <td className="max-w-xl px-5 py-4 text-ink">
                     <p className="line-clamp-2">{post.content}</p>
+                  </td>
+                  <td className="px-5 py-4">
+                    <VoiceScoreBadge
+                      score={post.voiceScore}
+                      toneScore={post.voiceToneScore}
+                      rhythmScore={post.voiceRhythmScore}
+                      wordChoiceScore={post.voiceWordChoiceScore}
+                      safeToPublish={post.voiceSafeToPublish}
+                      variant="compact"
+                    />
                   </td>
                   <td className="px-5 py-4">
                     <div className="flex gap-2">

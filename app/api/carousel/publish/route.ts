@@ -16,6 +16,7 @@ import { getFreshLinkedInAccount, postLinkedInComment, uploadLinkedInDocument } 
 import { PlanLimitError, assertFreePlanPostLimit } from "@/lib/plans";
 import { prisma } from "@/lib/prisma";
 import { scoreVoiceTextForUser, toStoredVoiceFields } from "@/lib/voice-dna";
+import { readRequestJson } from "@/lib/utils";
 
 const carouselSlideSchema = z.object({
   headline: z.string().trim().min(1, "Each slide needs a headline").max(MAX_CAROUSEL_HEADLINE),
@@ -79,7 +80,12 @@ export async function POST(request: NextRequest) {
     return user;
   }
 
-  const parsed = publishCarouselSchema.safeParse(await request.json());
+  const body = await readRequestJson<unknown>(request);
+  if (!body.ok) {
+    return NextResponse.json({ error: body.error }, { status: 400 });
+  }
+
+  const parsed = publishCarouselSchema.safeParse(body.data);
   if (!parsed.success) {
     return NextResponse.json(
       { error: parsed.error.issues[0]?.message ?? "Invalid carousel payload" },
@@ -169,7 +175,7 @@ export async function POST(request: NextRequest) {
           carouselDocumentBase64: parsed.data.pdfBase64,
           coverSlide: parsed.data.coverSlide,
           platforms: ["linkedin"],
-          status: "draft",
+          status: "publishing",
           scheduledAt: null,
           errorLog: null,
           publishLeaseId: null,
@@ -190,12 +196,30 @@ export async function POST(request: NextRequest) {
           carouselDocumentBase64: parsed.data.pdfBase64,
           coverSlide: parsed.data.coverSlide,
           platforms: ["linkedin"],
-          status: "draft",
+          status: "publishing",
           ...toStoredVoiceFields(result),
         },
       });
 
   postId = postRecord.id;
+
+  await prisma.postDelivery.upsert({
+    where: {
+      postId_platform: {
+        postId,
+        platform: "linkedin",
+      },
+    },
+    update: {
+      status: "publishing",
+      errorLog: null,
+    },
+    create: {
+      postId,
+      platform: "linkedin",
+      status: "publishing",
+    },
+  });
 
   try {
     const pdfBytes = base64ToPdfBytes(parsed.data.pdfBase64);
@@ -305,13 +329,33 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ success: true, postUrn, postId });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unable to publish carousel";
-    await prisma.post.update({
-      where: { id: postId },
-      data: {
-        status: "failed",
-        errorLog: message,
-      },
-    });
+    await prisma.$transaction([
+      prisma.post.update({
+        where: { id: postId },
+        data: {
+          status: "failed",
+          errorLog: message,
+        },
+      }),
+      prisma.postDelivery.upsert({
+        where: {
+          postId_platform: {
+            postId,
+            platform: "linkedin",
+          },
+        },
+        update: {
+          status: "failed",
+          errorLog: message,
+        },
+        create: {
+          postId,
+          platform: "linkedin",
+          status: "failed",
+          errorLog: message,
+        },
+      }),
+    ]);
 
     return NextResponse.json({ error: message }, { status: 400 });
   }

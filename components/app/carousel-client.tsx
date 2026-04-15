@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  AlertCircle,
   FileImage,
   FileText,
   GripVertical,
@@ -134,6 +135,8 @@ export function CarouselClient() {
   const [publishing, setPublishing] = useState(false);
   const [loadingScore, setLoadingScore] = useState(false);
   const [voice, setVoice] = useState<VoiceScore>(emptyVoiceState);
+  const [loadingExistingPost, setLoadingExistingPost] = useState(Boolean(postId));
+  const [loadPostError, setLoadPostError] = useState<string | null>(null);
 
   const scorableText = useMemo(
     () => (mode === "builder" ? buildCarouselContent(slides) : voiceText.trim()),
@@ -141,13 +144,30 @@ export function CarouselClient() {
   );
 
   useEffect(() => {
-    if (!postId) return;
+    if (!postId) {
+      setLoadingExistingPost(false);
+      setLoadPostError(null);
+      return;
+    }
+
+    let cancelled = false;
+    setLoadingExistingPost(true);
+    setLoadPostError(null);
 
     fetch("/api/posts")
-      .then((response) => response.json())
+      .then(async (response) => {
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(data.error ?? "Unable to load this carousel draft");
+        }
+        return data;
+      })
       .then(async (data) => {
+        if (cancelled) return;
         const post = (data.posts ?? []).find((item: CarouselPostRecord) => item.id === postId);
-        if (!post || post.postType !== "carousel") return;
+        if (!post || post.postType !== "carousel") {
+          throw new Error("This carousel draft no longer exists or you no longer have access to it.");
+        }
 
         setTitle(post.documentTitle ?? "Quill carousel");
         setMode(post.carouselMode ?? "builder");
@@ -176,7 +196,19 @@ export function CarouselClient() {
           );
         }
       })
-      .catch(() => undefined);
+      .catch((error) => {
+        if (cancelled) return;
+        setLoadPostError(
+          error instanceof Error ? error.message : "Unable to load this carousel draft"
+        );
+      })
+      .finally(() => {
+        if (cancelled) return;
+        setLoadingExistingPost(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [postId]);
 
   useEffect(() => {
@@ -195,17 +227,23 @@ export function CarouselClient() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ text: scorableText }),
         });
-        const result = await response.json();
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(result.error ?? "Unable to score this carousel right now.");
+        }
         setVoice({
           score: result.score ?? null,
           feedback: result.feedback ?? emptyVoiceState.feedback,
           tip: result.tip ?? "",
           traits: result.traits ?? [],
         });
-      } catch {
+      } catch (error) {
         setVoice({
           score: null,
-          feedback: "Unable to score this carousel right now.",
+          feedback:
+            error instanceof Error
+              ? error.message
+              : "Unable to score this carousel right now.",
           tip: "",
           traits: [],
         });
@@ -417,6 +455,31 @@ export function CarouselClient() {
 
       <div className="grid gap-6 xl:grid-cols-[1.45fr_0.95fr]">
         <div className="space-y-6">
+          {loadingExistingPost ? (
+            <div className="quill-card flex min-h-[320px] flex-col items-center justify-center gap-3 p-6 text-center">
+              <Loader2 className="h-6 w-6 animate-spin text-brand" />
+              <div>
+                <p className="font-medium text-ink">Loading carousel draft…</p>
+                <p className="mt-1 text-sm text-muted">Pulling the latest saved version before editing.</p>
+              </div>
+            </div>
+          ) : loadPostError ? (
+            <div className="quill-card rounded-xl border border-red-200 bg-red-50 p-6">
+              <div className="flex items-start gap-3">
+                <AlertCircle className="mt-0.5 h-5 w-5 text-red-600" />
+                <div>
+                  <p className="font-medium text-red-700">Unable to load this carousel draft</p>
+                  <p className="mt-2 text-sm text-red-600">{loadPostError}</p>
+                  <div className="mt-4 flex flex-wrap gap-3">
+                    <Button variant="outline" onClick={() => router.push("/scheduled")}>
+                      Back to Scheduled
+                    </Button>
+                    <Button onClick={() => router.replace("/carousel")}>Start fresh</Button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : (
           <div className="quill-card p-6">
             <div className="flex flex-wrap items-center gap-3">
               <button
@@ -786,9 +849,10 @@ export function CarouselClient() {
               </Button>
             </div>
           </div>
+          )}
         </div>
 
-        <div className="quill-card p-6">
+        {!loadingExistingPost && !loadPostError && <div className="quill-card p-6">
           <div className="flex items-center gap-2">
             <LayoutTemplate className="h-4 w-4 text-brand" />
             <div>
@@ -870,7 +934,7 @@ export function CarouselClient() {
               Upload a PDF or a set of slide images to preview the carousel pages here.
             </div>
           )}
-        </div>
+        </div>}
       </div>
     </section>
   );

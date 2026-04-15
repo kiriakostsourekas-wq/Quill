@@ -72,40 +72,40 @@ const plans = [
   {
     name: "Free",
     price: "$0",
-    description: "For trying Quill without a card and building an initial publishing habit.",
+    description: "A polished entry point into Quill while the product is still in active beta.",
     note: "No card required",
     features: [
-      "Up to 10 posts per month",
-      "One connected social account",
+      "Free beta access",
       "Voice DNA scoring",
+      "LinkedIn + X connections",
       "Carousel creator",
     ],
     featured: false,
   },
   {
-    name: "Solo",
-    price: "$12",
-    description: "For creators who want to publish more often across LinkedIn and X.",
-    note: "7-day trial, card required",
+    name: "Beta",
+    price: "$0",
+    description: "The main Quill beta experience for creators who want premium workflows without payment friction.",
+    note: "Free during beta",
     features: [
-      "Unlimited posts",
+      "Unlimited posts during beta",
       "LinkedIn + X publishing",
-      "Unlimited scheduled posts",
+      "Content calendar + ideas",
       "First comment automation",
-      "Advanced carousel publishing",
+      "Voice rewrite suggestions",
     ],
     featured: false,
   },
   {
-    name: "Pro",
-    price: "$29",
-    description: "For power users who want rewriting, stronger workflows, and analytics.",
-    note: "7-day trial, card required",
+    name: "Pro Beta",
+    price: "$0",
+    description: "The full Quill stack, positioned as premium and unlocked for early users while we refine the product.",
+    note: "Early users get Pro features free during beta",
     features: [
-      "Everything in Solo",
-      "AI voice rewriting",
-      "Analytics dashboard",
-      "Priority publishing workflow",
+      "Everything in Beta",
+      "Authenticity history analytics",
+      "Advanced carousel publishing",
+      "Premium Voice DNA tooling",
     ],
     featured: true,
   },
@@ -130,11 +130,11 @@ const faqs = [
   },
   {
     q: "Can I use Quill for free?",
-    a: "Yes. Quill includes a limited Free plan with up to 10 posts per month and one connected social account. Paid plans add unlimited posting, multi-platform workflows, and advanced features.",
+    a: "Yes. Quill is free during beta, and no card is required. Early users get the full premium workflow while we refine the product with real creator feedback.",
   },
   {
-    q: "Can I cancel anytime?",
-    a: "Yes. Free never requires a card. Paid plans start with a 7-day trial, and you can cancel before billing or later from your account settings.",
+    q: "Do I need a card during beta?",
+    a: "No. Billing is paused during beta. You can sign up, connect your accounts, and use the full product without entering payment details.",
   },
 ];
 
@@ -159,22 +159,46 @@ const platformPreviews = [
   },
 ];
 
-function StartButtons({ centered = false }: { centered?: boolean }) {
+function NavStartButtons() {
   return (
-    <div
-      className={`flex flex-col items-start gap-3 ${centered ? "items-center justify-center" : ""}`}
-    >
+    <div className="flex items-center gap-3">
       <form action="/api/auth/linkedin" method="post">
         <button
           type="submit"
           className="inline-flex h-11 items-center justify-center rounded-md bg-brand px-5 text-sm font-medium text-white transition hover:bg-brand/90"
         >
-          Start free
+          Start beta with LinkedIn
         </button>
       </form>
-      <p className="text-sm text-muted">
-        Start with LinkedIn. Connect X later from Settings.
-      </p>
+      <form action="/api/auth/twitter" method="post">
+        <button
+          type="submit"
+          className="inline-flex h-11 items-center justify-center rounded-md border border-line bg-white px-5 text-sm font-medium text-ink transition hover:bg-slate-50"
+        >
+          Start beta with X
+        </button>
+      </form>
+    </div>
+  );
+}
+
+function HeroStartButton({
+  centered = false,
+  label = "Join free beta",
+}: {
+  centered?: boolean;
+  label?: string;
+}) {
+  return (
+    <div className={`flex ${centered ? "items-center justify-center" : ""}`}>
+      <form action="/api/auth/linkedin" method="post">
+        <button
+          type="submit"
+          className="inline-flex h-11 items-center justify-center rounded-md bg-brand px-5 text-sm font-medium text-white transition hover:bg-brand/90"
+        >
+          {label}
+        </button>
+      </form>
     </div>
   );
 }
@@ -212,7 +236,7 @@ export default async function HomePage() {
           </div>
 
           <div className="hidden md:block">
-            <StartButtons />
+            <NavStartButtons />
           </div>
 
           <div className="md:hidden">
@@ -240,12 +264,9 @@ export default async function HomePage() {
           </p>
 
           <div className="mt-10">
-            <StartButtons centered />
+            <HeroStartButton centered />
           </div>
 
-          <p className="mt-5 text-sm text-muted">
-            Free plan available · Paid plans start with a 7-day trial
-          </p>
         </div>
       </section>
 
@@ -432,8 +453,11 @@ export default async function HomePage() {
         <div className="mx-auto max-w-4xl">
           <div className="mb-16 text-center">
             <h2 className="text-3xl font-bold tracking-tight text-ink sm:text-4xl">
-              Simple, transparent pricing
+              Free during beta
             </h2>
+            <p className="mt-4 text-base text-muted">
+              No card required. Early users get Pro features free during beta.
+            </p>
           </div>
 
           <div className="mx-auto grid max-w-5xl gap-8 lg:grid-cols-3">
@@ -455,7 +479,7 @@ export default async function HomePage() {
 
                 <div className="mb-6 mt-6">
                   <span className="text-4xl font-bold text-ink">{plan.price}</span>
-                  <span className="text-sm text-muted">/month</span>
+                  <span className="text-sm text-muted"> during beta</span>
                   <p className="mt-2 text-xs font-medium uppercase tracking-[0.12em] text-muted">
                     {plan.note}
                   </p>
@@ -470,13 +494,13 @@ export default async function HomePage() {
                   ))}
                 </ul>
 
-                <StartButtons />
+                <HeroStartButton label="Join beta" />
               </div>
             ))}
           </div>
 
           <p className="mt-8 text-center text-sm text-muted">
-            Everyone starts on Free. Upgrade inside Quill when you need more volume, multi-platform publishing, and analytics.
+            Premium positioning stays intact, but billing is paused while Quill is in beta.
           </p>
         </div>
       </section>
@@ -506,10 +530,10 @@ export default async function HomePage() {
             Ready to post in your own voice?
           </h2>
           <p className="mt-4 text-lg text-white/80">
-            Review the product first, then start with the provider you already use most.
+            Start free during beta, train your Voice DNA, and ship with the full workflow unlocked.
           </p>
           <div className="mt-8">
-            <StartButtons centered />
+            <HeroStartButton centered />
           </div>
         </div>
       </section>

@@ -5,6 +5,7 @@ import { requireRequestUser } from "@/lib/auth";
 import { sendWelcomeEmail } from "@/lib/email";
 import { prisma } from "@/lib/prisma";
 import { appendOnboardingCookie, appendRoleCookie, appendSessionCookie } from "@/lib/session";
+import { readRequestJson } from "@/lib/utils";
 
 const onboardingSchema = z.object({
   useCase: z.string().trim().min(1, "Choose what brings you to Quill"),
@@ -26,7 +27,12 @@ export async function POST(request: NextRequest) {
     return user;
   }
 
-  const parsed = onboardingSchema.safeParse(await request.json());
+  const body = await readRequestJson<unknown>(request);
+  if (!body.ok) {
+    return NextResponse.json({ error: body.error }, { status: 400 });
+  }
+
+  const parsed = onboardingSchema.safeParse(body.data);
   if (!parsed.success) {
     return NextResponse.json(
       { error: parsed.error.issues[0]?.message ?? "Invalid onboarding response" },

@@ -2,18 +2,25 @@ import { z } from "zod";
 import { NextRequest, NextResponse } from "next/server";
 import { getRequestUser } from "@/lib/auth";
 import { claimAndPublishPost, ImmutablePostError, PublishConflictError } from "@/lib/publishing";
+import { readRequestJson } from "@/lib/utils";
 
 const publishSchema = z.object({
   postId: z.string().min(1),
 });
 
 export async function POST(request: NextRequest) {
-  const parsed = publishSchema.safeParse(await request.json());
+  const body = await readRequestJson<unknown>(request);
+  if (!body.ok) {
+    return NextResponse.json({ error: body.error }, { status: 400 });
+  }
+
+  const parsed = publishSchema.safeParse(body.data);
   if (!parsed.success) {
     return NextResponse.json({ error: "postId is required" }, { status: 400 });
   }
 
-  const internalSecret = request.headers.get("x-quill-internal-secret");
+  const bearerToken = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
+  const internalSecret = request.headers.get("x-quill-internal-secret") ?? bearerToken;
   const isInternal = !!internalSecret && internalSecret === (process.env.CRON_SECRET ?? "");
   const user = isInternal ? null : await getRequestUser(request);
 

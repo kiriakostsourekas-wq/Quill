@@ -2,6 +2,7 @@ import { z } from "zod";
 import { NextRequest, NextResponse } from "next/server";
 import { getEffectivePlan, requireRequestUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { readRequestJson } from "@/lib/utils";
 
 const updateMeSchema = z.object({
   name: z.string().trim().min(1).max(80),
@@ -33,7 +34,12 @@ export async function PATCH(request: NextRequest) {
     return user;
   }
 
-  const parsed = updateMeSchema.safeParse(await request.json());
+  const body = await readRequestJson<unknown>(request);
+  if (!body.ok) {
+    return NextResponse.json({ error: body.error }, { status: 400 });
+  }
+
+  const parsed = updateMeSchema.safeParse(body.data);
   if (!parsed.success) {
     return NextResponse.json(
       { error: parsed.error.issues[0]?.message ?? "Invalid profile update" },

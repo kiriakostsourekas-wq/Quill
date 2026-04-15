@@ -10,19 +10,23 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        brand: "#534AB7",
-        "brand-light": "#EEEDFE",
-        canvas: "#F9F9F9",
-        ink: "#1A1A1A",
-        muted: "#6B7280",
-        line: "#E5E7EB",
+        brand: "rgb(var(--color-brand) / <alpha-value>)",
+        "brand-light": "rgb(var(--color-brand-light) / <alpha-value>)",
+        canvas: "rgb(var(--color-canvas) / <alpha-value>)",
+        ink: "rgb(var(--color-ink) / <alpha-value>)",
+        muted: "rgb(var(--color-muted) / <alpha-value>)",
+        line: "rgb(var(--color-line) / <alpha-value>)",
+        surface: "rgb(var(--color-surface) / <alpha-value>)",
+        "surface-muted": "rgb(var(--color-surface-muted) / <alpha-value>)",
+        "surface-soft": "rgb(var(--color-surface-soft) / <alpha-value>)",
+        skeleton: "rgb(var(--color-skeleton) / <alpha-value>)",
       },
       borderRadius: {
         lg: "12px",
         md: "8px",
       },
       boxShadow: {
-        soft: "0 1px 2px rgba(17, 24, 39, 0.04)",
+        soft: "var(--shadow-soft)",
       },
     },
   },

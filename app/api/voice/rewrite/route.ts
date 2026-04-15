@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireRequestUser } from "@/lib/auth";
 import { groq } from "@/lib/groq";
 import { prisma } from "@/lib/prisma";
+import { readRequestJson } from "@/lib/utils";
 
 export const runtime = "nodejs";
 
@@ -16,7 +17,12 @@ export async function POST(request: NextRequest) {
     return user;
   }
 
-  const parsed = rewriteSchema.safeParse(await request.json());
+  const body = await readRequestJson<unknown>(request);
+  if (!body.ok) {
+    return NextResponse.json({ error: body.error }, { status: 400 });
+  }
+
+  const parsed = rewriteSchema.safeParse(body.data);
   if (!parsed.success) {
     return NextResponse.json(
       { error: parsed.error.issues[0]?.message ?? "Text is required" },
@@ -35,21 +41,30 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const completion = await groq.chat.completions.create({
-    model: "llama-3.3-70b-versatile",
-    stream: true,
-    messages: [
-      {
-        role: "system",
-        content:
-          "Rewrite this post to match the voice profile exactly. Return only the rewritten text.",
-      },
-      {
-        role: "user",
-        content: `Voice profile: ${JSON.stringify(profile)}\n\nPost:\n${parsed.data.text}`,
-      },
-    ],
-  });
+  let completion;
+  try {
+    completion = await groq.chat.completions.create({
+      model: "llama-3.3-70b-versatile",
+      stream: true,
+      messages: [
+        {
+          role: "system",
+          content:
+            "Rewrite this post to match the voice profile exactly. Return only the rewritten text.",
+        },
+        {
+          role: "user",
+          content: `Voice profile: ${JSON.stringify(profile)}\n\nPost:\n${parsed.data.text}`,
+        },
+      ],
+    });
+  } catch (error) {
+    console.error("Voice rewrite failed to start", error);
+    return NextResponse.json(
+      { error: "Unable to rewrite this draft right now" },
+      { status: 502 }
+    );
+  }
 
   const encoder = new TextEncoder();
   const stream = new ReadableStream({
@@ -62,6 +77,7 @@ export async function POST(request: NextRequest) {
           }
         }
       } catch (error) {
+        console.error("Voice rewrite stream failed", error);
         controller.error(error);
         return;
       }

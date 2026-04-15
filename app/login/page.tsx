@@ -15,7 +15,7 @@ const errorMessages: Record<string, string> = {
   twitter_auth:
     "X sign-in failed after the provider callback. Check the callback logs in Vercel and confirm the X app credentials are correct.",
   account_limit:
-    "Free includes one connected social account. Upgrade inside Quill to connect both LinkedIn and X.",
+    "Beta access currently includes LinkedIn and X connection support for all users.",
 };
 
 export default async function LoginPage({
@@ -35,7 +35,7 @@ export default async function LoginPage({
           <QuillLogo />
           <h1 className="mt-6 text-2xl font-semibold text-ink">Continue with Quill.</h1>
           <p className="mt-2 text-sm text-muted">
-            Start with LinkedIn. You can connect X later from Settings.
+            Join the free beta with LinkedIn. You can connect X once you’re inside.
           </p>
         </div>
 

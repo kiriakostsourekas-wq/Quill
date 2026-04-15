@@ -11,6 +11,7 @@ import {
   syncPostDeliveries,
 } from "@/lib/publishing";
 import { scoreVoiceTextForUser, toStoredVoiceFields } from "@/lib/voice-dna";
+import { readRequestJson } from "@/lib/utils";
 
 const publishNowSchema = z.object({
   postId: z.string().optional(),
@@ -34,7 +35,12 @@ export async function POST(request: NextRequest) {
     return user;
   }
 
-  const parsed = publishNowSchema.safeParse(await request.json());
+  const body = await readRequestJson<unknown>(request);
+  if (!body.ok) {
+    return NextResponse.json({ error: body.error }, { status: 400 });
+  }
+
+  const parsed = publishNowSchema.safeParse(body.data);
   if (!parsed.success) {
     return NextResponse.json(
       { error: parsed.error.issues[0]?.message ?? "Invalid publish payload" },

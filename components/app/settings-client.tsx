@@ -1,6 +1,5 @@
 "use client";
 
-import { format } from "date-fns";
 import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
@@ -25,6 +24,8 @@ type SubscriptionState = {
   status: string | null;
   currentPeriodEnd: string | null;
   cancelAtPeriodEnd: boolean;
+  betaAccess?: boolean;
+  message?: string;
 };
 
 export function SettingsClient() {
@@ -35,24 +36,61 @@ export function SettingsClient() {
   const [subscription, setSubscription] = useState<SubscriptionState | null>(null);
   const [name, setName] = useState("");
   const [connectingPlatform, setConnectingPlatform] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   async function loadSettings() {
-    const [accountsRes, meRes, subscriptionRes] = await Promise.all([
+    const [accountsRes, meRes, subscriptionRes] = await Promise.allSettled([
       fetch("/api/accounts"),
       fetch("/api/me"),
       fetch("/api/stripe/subscription"),
     ]);
-    const accountsData = await accountsRes.json();
-    const meData = await meRes.json();
-    const subscriptionData = await subscriptionRes.json();
-    setAccounts(accountsData.accounts ?? []);
-    setUser(meData.user ?? null);
-    setSubscription(subscriptionData ?? null);
-    setName(meData.user?.name ?? "");
+
+    let nextError: string | null = null;
+
+    if (accountsRes.status === "fulfilled") {
+      const accountsData = await accountsRes.value.json().catch(() => ({}));
+      if (accountsRes.value.ok) {
+        setAccounts(accountsData.accounts ?? []);
+      } else {
+        nextError = accountsData.error ?? "Unable to load connected accounts";
+      }
+    } else {
+      nextError = "Unable to load connected accounts";
+    }
+
+    if (meRes.status === "fulfilled") {
+      const meData = await meRes.value.json().catch(() => ({}));
+      if (meRes.value.ok) {
+        setUser(meData.user ?? null);
+        setName(meData.user?.name ?? "");
+      } else {
+        nextError = nextError ?? meData.error ?? "Unable to load account settings";
+      }
+    } else {
+      nextError = nextError ?? "Unable to load account settings";
+    }
+
+    if (subscriptionRes.status === "fulfilled") {
+      const subscriptionData = await subscriptionRes.value.json().catch(() => ({}));
+      if (subscriptionRes.value.ok) {
+        setSubscription(subscriptionData ?? null);
+      } else {
+        nextError = nextError ?? subscriptionData.error ?? "Unable to load access details";
+      }
+    } else {
+      nextError = nextError ?? "Unable to load access details";
+    }
+
+    setLoadError(nextError);
+    setLoading(false);
   }
 
   useEffect(() => {
-    loadSettings().catch(() => undefined);
+    loadSettings().catch((error) => {
+      setLoadError(error instanceof Error ? error.message : "Unable to load settings");
+      setLoading(false);
+    });
   }, []);
 
   useEffect(() => {
@@ -71,7 +109,7 @@ export function SettingsClient() {
     if (!error) return;
 
     if (error === "account_limit") {
-      toast.error("Free includes one connected social account. Upgrade to connect both LinkedIn and X.");
+      toast.message("Beta access currently includes LinkedIn and X for everyone.");
     }
 
     const next = new URLSearchParams(searchParams.toString());
@@ -104,36 +142,30 @@ export function SettingsClient() {
     await loadSettings();
   }
 
-  async function manageBilling() {
-    const response = await fetch("/api/stripe/portal", { method: "POST" });
-    const data = await response.json();
-    if (data.url) {
-      window.location.href = data.url;
-      return;
-    }
-    toast.error(data.error ?? "Unable to open billing portal");
-  }
-
   const linkedIn = accounts.find((account) => account.platform === "linkedin");
   const twitter = accounts.find((account) => account.platform === "twitter");
   const isAdminAccount = user?.role === "admin" || subscription?.plan === "admin";
-  const displayedPlan = isAdminAccount ? "admin" : subscription?.plan ?? user?.plan ?? "free";
+  const displayedPlan = isAdminAccount ? "admin" : "beta";
 
   const billingDateLabel = isAdminAccount
     ? "Admin account — no billing"
-    : subscription?.currentPeriodEnd
-      ? format(new Date(subscription.currentPeriodEnd), "PPP")
-      : "Not available";
+    : "Free beta access";
 
   return (
     <section className="space-y-8">
       <div>
         <h1 className="text-2xl font-semibold text-ink">Settings</h1>
-        <p className="mt-1 text-sm text-muted">Manage connected accounts, billing, and account details.</p>
+        <p className="mt-1 text-sm text-muted">Manage connected accounts, beta access, and account details.</p>
       </div>
 
+      {loadError && !loading && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
+          {loadError}
+        </div>
+      )}
+
       <div className="quill-card divide-y divide-line">
-        <section className="p-6">
+        <section className="p-6" id="connections">
           <h2 className="text-lg font-semibold text-ink">Connected Accounts</h2>
           <div className="mt-5 space-y-4">
             {[
@@ -166,23 +198,29 @@ export function SettingsClient() {
         </section>
 
         <section className="p-6">
-          <h2 className="text-lg font-semibold text-ink">Subscription</h2>
+          <h2 className="text-lg font-semibold text-ink">Access</h2>
           <div className="mt-5 flex flex-col gap-4 rounded-lg border border-line p-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <p className="text-sm text-muted">Current plan</p>
+              <p className="text-sm text-muted">Current access</p>
               <div className="mt-2">
                 <StatusBadge value={displayedPlan} />
               </div>
-              <p className="mt-3 text-sm text-muted">Next billing date: {billingDateLabel}</p>
-              {subscription?.cancelAtPeriodEnd && subscription.currentPeriodEnd && (
+              <p className="mt-3 text-sm text-muted">
+                {isAdminAccount
+                  ? `Next billing date: ${billingDateLabel}`
+                  : "You’re on free beta access"}
+              </p>
+              {!isAdminAccount && (
                 <p className="mt-2 text-sm text-muted">
-                  Cancellation is set for the end of the current billing period.
+                  {subscription?.message ?? "All Pro features are unlocked during beta."}
                 </p>
               )}
             </div>
-            <Button variant="outline" onClick={manageBilling}>
-              Manage billing →
-            </Button>
+            {!isAdminAccount && (
+              <div className="rounded-lg border border-line bg-slate-50 px-4 py-3 text-sm text-muted">
+                Billing is paused while Quill is in beta.
+              </div>
+            )}
           </div>
         </section>
 

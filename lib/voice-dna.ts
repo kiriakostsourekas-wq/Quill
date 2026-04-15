@@ -5,19 +5,67 @@ import { parseJsonObject } from "@/lib/utils";
 
 export type VoiceScoreResult = {
   score: number;
+  toneScore: number;
+  rhythmScore: number;
+  wordChoiceScore: number;
   feedback: string;
   tip: string;
+  signaturePhrases: string[];
+  safeToPublish: boolean;
   weakestSentence: string;
   suggestions: string[];
 };
 
 type GroqScoreResult = {
   score?: number;
+  toneScore?: number;
+  rhythmScore?: number;
+  wordChoiceScore?: number;
   feedback?: string;
   tip?: string;
+  safeToPublish?: boolean;
   weakestSentence?: string;
   suggestions?: string[];
 };
+
+const STOP_WORDS = new Set([
+  "a",
+  "an",
+  "and",
+  "are",
+  "as",
+  "at",
+  "be",
+  "but",
+  "by",
+  "for",
+  "from",
+  "how",
+  "i",
+  "if",
+  "in",
+  "into",
+  "is",
+  "it",
+  "of",
+  "on",
+  "or",
+  "so",
+  "that",
+  "the",
+  "their",
+  "there",
+  "they",
+  "this",
+  "to",
+  "was",
+  "we",
+  "what",
+  "when",
+  "with",
+  "you",
+  "your",
+]);
 
 function getMessageText(
   content: string | Array<{ type?: string; text?: string }> | null | undefined
@@ -36,6 +84,54 @@ function extractSentences(text: string) {
   return matches
     .map((match) => (match[0] ?? "").trim())
     .filter(Boolean);
+}
+
+function clampScore(value: number | undefined, fallback: number) {
+  return Math.max(0, Math.min(100, Math.round(value ?? fallback)));
+}
+
+function wordsFromText(text: string) {
+  return text
+    .toLowerCase()
+    .replace(/[^a-z0-9'\s-]/g, " ")
+    .split(/\s+/)
+    .map((word) => word.trim())
+    .filter(Boolean);
+}
+
+function buildSignaturePhraseCandidates(profile: VoiceProfile) {
+  const phraseCounts = new Map<string, number>();
+
+  for (const sample of profile.samplePosts) {
+    const words = wordsFromText(sample);
+    for (let size = 2; size <= 4; size += 1) {
+      for (let index = 0; index <= words.length - size; index += 1) {
+        const chunk = words.slice(index, index + size);
+        if (chunk.some((word) => STOP_WORDS.has(word))) continue;
+        const phrase = chunk.join(" ");
+        phraseCounts.set(phrase, (phraseCounts.get(phrase) ?? 0) + 1);
+      }
+    }
+  }
+
+  return [...phraseCounts.entries()]
+    .filter(([, count]) => count > 1)
+    .sort((a, b) => b[1] - a[1] || b[0].length - a[0].length)
+    .map(([phrase]) => phrase)
+    .slice(0, 8);
+}
+
+function detectSignaturePhrases(profile: VoiceProfile, text: string) {
+  const normalizedText = ` ${text.toLowerCase()} `;
+  return buildSignaturePhraseCandidates(profile)
+    .filter((phrase) => normalizedText.includes(` ${phrase} `))
+    .slice(0, 4)
+    .map((phrase) =>
+      phrase
+        .split(" ")
+        .map((part) => (part.length > 2 ? part[0].toUpperCase() + part.slice(1) : part))
+        .join(" ")
+    );
 }
 
 function pickWeakestSentence(text: string, weakestSentence?: string) {
@@ -100,7 +196,7 @@ export async function scoreVoiceText(
       {
         role: "system",
         content:
-          "Score this text 0-100 against this voice profile. Return ONLY valid JSON: { score: number, feedback: string, tip: string, weakestSentence: string, suggestions: string[] }. Also identify the single weakest sentence and provide 3 specific, actionable suggestions to make this post sound more like the user. Each suggestion should be one concrete sentence starting with an action verb. Return these as weakestSentence (string) and suggestions (string array of 3 items). Each suggestion should also work as a direct replacement option for the weakest sentence while keeping the same core meaning.",
+          "Score this text 0-100 against this voice profile. Return ONLY valid JSON: { score: number, toneScore: number, rhythmScore: number, wordChoiceScore: number, feedback: string, tip: string, safeToPublish: boolean, weakestSentence: string, suggestions: string[] }. Tone score measures tone match, rhythm score measures sentence rhythm match, and wordChoiceScore measures vocabulary/phrase match. Also identify the single weakest sentence and provide 3 specific, actionable suggestions to make this post sound more like the user. Each suggestion should be one concrete sentence starting with an action verb. Return these as weakestSentence (string) and suggestions (string array of 3 items). Each suggestion should also work as a direct replacement option for the weakest sentence while keeping the same core meaning.",
       },
       {
         role: "user",
@@ -113,11 +209,25 @@ export async function scoreVoiceText(
   const raw = parseJsonObject<GroqScoreResult>(content);
   const weakestSentence = pickWeakestSentence(text, raw.weakestSentence);
   const suggestions = normalizeSuggestions(raw.suggestions, profile, weakestSentence);
+  const score = clampScore(raw.score, 0);
+  const toneScore = clampScore(raw.toneScore, score + 2);
+  const rhythmScore = clampScore(raw.rhythmScore, score - 2);
+  const wordChoiceScore = clampScore(raw.wordChoiceScore, score + 1);
+  const signaturePhrases = detectSignaturePhrases(profile, text);
+  const safeToPublish =
+    typeof raw.safeToPublish === "boolean"
+      ? raw.safeToPublish
+      : score >= 88 && Math.min(toneScore, rhythmScore, wordChoiceScore) >= 78;
 
   return {
-    score: Math.max(0, Math.min(100, Math.round(raw.score ?? 0))),
+    score,
+    toneScore,
+    rhythmScore,
+    wordChoiceScore,
     feedback: raw.feedback?.trim() || "This draft needs a stronger match to your Voice DNA.",
     tip: raw.tip?.trim() || "Use a more natural sentence rhythm and phrasing that sounds like you.",
+    signaturePhrases,
+    safeToPublish,
     weakestSentence,
     suggestions,
   };
@@ -146,8 +256,13 @@ export function toStoredVoiceFields(result: VoiceScoreResult | null) {
   if (!result) {
     return {
       voiceScore: null,
+      voiceToneScore: null,
+      voiceRhythmScore: null,
+      voiceWordChoiceScore: null,
       voiceFeedback: null,
       voiceTip: null,
+      voiceSignaturePhrases: [],
+      voiceSafeToPublish: null,
       voiceWeakestSentence: null,
       voiceSuggestions: [],
       lastVoiceScoredAt: null,
@@ -156,8 +271,13 @@ export function toStoredVoiceFields(result: VoiceScoreResult | null) {
 
   return {
     voiceScore: result.score,
+    voiceToneScore: result.toneScore,
+    voiceRhythmScore: result.rhythmScore,
+    voiceWordChoiceScore: result.wordChoiceScore,
     voiceFeedback: result.feedback,
     voiceTip: result.tip,
+    voiceSignaturePhrases: result.signaturePhrases,
+    voiceSafeToPublish: result.safeToPublish,
     voiceWeakestSentence: result.weakestSentence,
     voiceSuggestions: result.suggestions,
     lastVoiceScoredAt: new Date(),

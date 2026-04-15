@@ -15,7 +15,12 @@ import {
 import { PlanLimitError, assertPlanAllowsPlatforms } from "@/lib/plans";
 import { prisma } from "@/lib/prisma";
 import { ImmutablePostError, isPostImmutable, syncPostDeliveries } from "@/lib/publishing";
+import {
+  AUTO_SCHEDULING_ENABLED,
+  AUTO_SCHEDULING_UNAVAILABLE_MESSAGE,
+} from "@/lib/scheduling";
 import { scoreVoiceTextForUser, toStoredVoiceFields } from "@/lib/voice-dna";
+import { readRequestJson } from "@/lib/utils";
 
 const platformSchema = z.enum(["linkedin", "twitter"]);
 const carouselSlideSchema = z.object({
@@ -102,7 +107,12 @@ export async function PATCH(
     );
   }
 
-  const parsed = updatePostSchema.safeParse(await request.json());
+  const body = await readRequestJson<unknown>(request);
+  if (!body.ok) {
+    return NextResponse.json({ error: body.error }, { status: 400 });
+  }
+
+  const parsed = updatePostSchema.safeParse(body.data);
   if (!parsed.success) {
     return NextResponse.json(
       {
@@ -132,6 +142,13 @@ export async function PATCH(
         ? new Date(parsed.data.scheduledAt)
         : null;
 
+  if (nextScheduledAt && nextScheduledAt.getTime() <= Date.now()) {
+    return NextResponse.json(
+      { error: "Scheduled time must be in the future" },
+      { status: 400 }
+    );
+  }
+
   let nextStatus = parsed.data.status ?? existing.status;
 
   if (parsed.data.scheduledAt !== undefined) {
@@ -142,6 +159,13 @@ export async function PATCH(
     return NextResponse.json(
       { error: "scheduledAt is required when status is scheduled" },
       { status: 400 }
+    );
+  }
+
+  if (nextStatus === "scheduled" && !AUTO_SCHEDULING_ENABLED) {
+    return NextResponse.json(
+      { error: AUTO_SCHEDULING_UNAVAILABLE_MESSAGE },
+      { status: 409 }
     );
   }
 

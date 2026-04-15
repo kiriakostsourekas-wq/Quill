@@ -2,6 +2,7 @@ import { getEffectivePlan } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
 export const FREE_PLAN_MONTHLY_POST_LIMIT = 10;
+export const BETA_MODE_ENABLED = true;
 
 type PlanUser = {
   id: string;
@@ -17,13 +18,14 @@ export class PlanLimitError extends Error {
 }
 
 export function isFreePlanUser(user: Pick<PlanUser, "plan" | "role">) {
-  return getEffectivePlan(user) === "free";
+  return !BETA_MODE_ENABLED && getEffectivePlan(user) === "free";
 }
 
 export function assertPlanAllowsPlatforms(
   user: Pick<PlanUser, "plan" | "role">,
   platforms: string[]
 ) {
+  if (BETA_MODE_ENABLED) return;
   if (!isFreePlanUser(user)) return;
 
   if (new Set(platforms).size > 1) {
@@ -32,6 +34,7 @@ export function assertPlanAllowsPlatforms(
 }
 
 export async function assertFreePlanPostLimit(user: PlanUser, postId?: string | null) {
+  if (BETA_MODE_ENABLED) return;
   if (!isFreePlanUser(user) || postId) return;
 
   const startOfMonth = new Date();
@@ -58,6 +61,7 @@ export async function assertFreePlanSocialAccountLimit(
   user: PlanUser,
   platform: "linkedin" | "twitter"
 ) {
+  if (BETA_MODE_ENABLED) return;
   if (!isFreePlanUser(user)) return;
 
   const existing = await prisma.socialAccount.findMany({

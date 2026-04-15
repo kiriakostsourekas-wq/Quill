@@ -57,12 +57,10 @@ export default function TermsPage() {
             <section>
               <h2 className="text-base font-semibold text-ink">Payment and Billing</h2>
               <p className="mt-2">
-                Paid plans may include a 7-day free trial. A valid payment method is required to
-                start the trial. You will not be charged until the trial ends, but unless you
-                cancel before the end of the trial, your subscription will automatically renew and
-                Stripe will charge the payment method on file. You may cancel at any time, and the
-                cancellation will take effect at the end of the current billing period unless
-                stated otherwise.
+                Quill is currently offered free during beta, and no payment method is required to
+                use the product at this stage. Quill may introduce paid plans in the future. If
+                that happens, Quill will update these terms, update in-product messaging, and give
+                users notice before any billing begins.
               </p>
             </section>
 

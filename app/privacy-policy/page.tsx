@@ -5,12 +5,12 @@ const sections = [
   {
     title: "Information We Collect",
     body:
-      "We collect information you provide directly to Quill, including account details, content drafts, connected social account metadata, billing information, and support requests. We may also collect product usage and device information to operate and improve the service.",
+      "We collect information you provide directly to Quill, including account details, content drafts, connected social account metadata, and support requests. We may also collect product usage and device information to operate and improve the service. If paid plans are introduced later, billing information would be collected at that time.",
   },
   {
     title: "How We Use Information",
     body:
-      "We use your information to authenticate your account, analyze your writing style, schedule and publish posts, process payments, improve the product, and communicate service updates.",
+      "We use your information to authenticate your account, analyze your writing style, schedule and publish posts, improve the product, and communicate service updates. If paid plans launch later, payment information would be used to manage billing.",
   },
   {
     title: "Sharing",
