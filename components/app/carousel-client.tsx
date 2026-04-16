@@ -449,8 +449,14 @@ export function CarouselClient() {
       <div>
         <h1 className="text-2xl font-semibold text-ink">LinkedIn Carousel Creator</h1>
         <p className="mt-1 text-sm text-muted">
-          Create slide-based PDF posts that get 3-5x more engagement.
+          Create slide-based PDF posts and publish them directly to LinkedIn.
         </p>
+      </div>
+
+      <div className="rounded-xl border border-line bg-slate-50 px-4 py-3 text-sm leading-6 text-muted">
+        <span className="font-medium text-ink">Supported here:</span> LinkedIn PDF/document
+        publishing, including PDFs built from slide images. Automatic scheduling is not available
+        for carousels, and native image-only LinkedIn posts are not a separate publish format yet.
       </div>
 
       <div className="grid gap-6 xl:grid-cols-[1.45fr_0.95fr]">

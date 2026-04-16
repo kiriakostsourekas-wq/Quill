@@ -17,6 +17,9 @@ async function runScheduledPublishSweep() {
   const duePosts = await prisma.post.findMany({
     where: {
       status: "scheduled",
+      NOT: {
+        postType: "carousel",
+      },
       scheduledAt: {
         lte: new Date(),
       },

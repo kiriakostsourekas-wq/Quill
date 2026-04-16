@@ -6,10 +6,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Bookmark, BookmarkCheck, Loader2, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { getVoiceDimensions, type VoiceDimensions } from "@/lib/voice-foundations";
 import { cn, safeJson } from "@/lib/utils";
 
 type VoiceProfile = {
   traits: string[];
+  dimensions?: VoiceDimensions | null;
   summary?: string | null;
 };
 
@@ -56,24 +58,28 @@ function dedupeTopics(topics: string[]) {
 }
 
 function buildSuggestedTopics(profile: VoiceProfile | null) {
-  if (!profile?.traits?.length) {
+  if (!profile) {
     return defaultTopics.slice(0, 8);
   }
 
-  const traitMap: Record<string, string[]> = {
-    analytical: ["Data", "Strategy", "Systems"],
-    storyteller: ["Founder stories", "Behind the scenes", "Career moments"],
-    conversational: ["Communication", "Personal brand", "Lessons learned"],
-    direct: ["Execution", "Decisions", "Leadership"],
-    hookfirst: ["Contrarian takes", "Hard truths", "Unpopular opinions"],
-    "hook-first": ["Contrarian takes", "Hard truths", "Unpopular opinions"],
-    opinionated: ["Industry takes", "Hot takes", "What most people miss"],
-    reflective: ["Lessons learned", "Career growth", "Founder lessons"],
-    educational: ["How-to posts", "Frameworks", "Tips"],
-  };
+  const dimensions = getVoiceDimensions(profile);
+  const suggested: string[] = [];
 
-  const normalizedTraits = profile.traits.map((trait) => trait.toLowerCase().replace(/\s+/g, ""));
-  const suggested = normalizedTraits.flatMap((trait) => traitMap[trait] ?? []);
+  if (/contrarian|strong claim|sharp/i.test(dimensions.hookStyle)) {
+    suggested.push("Contrarian takes", "Hard truths", "Industry opinions");
+  }
+  if (/story|reflect/i.test(dimensions.storytellingVsTeaching) || /reflect/i.test(dimensions.orientation)) {
+    suggested.push("Lessons learned", "Founder stories", "Career moments");
+  }
+  if (/teach|framework|structured/i.test(dimensions.storytellingVsTeaching) || /structured|list/i.test(dimensions.listUsage)) {
+    suggested.push("Frameworks", "How-to posts", "Tips");
+  }
+  if (/practical|execution|operator/i.test(dimensions.orientation)) {
+    suggested.push("Systems", "Execution", "Leadership");
+  }
+  if (/concrete|simple|plain/i.test(dimensions.languageStyle)) {
+    suggested.push("Communication", "Personal brand", "Audience growth");
+  }
 
   return dedupeTopics([...suggested, ...defaultTopics]);
 }

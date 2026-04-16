@@ -112,8 +112,11 @@ model PostPublishAttempt {
 model VoiceProfile {
   id             String   @id @default(cuid())
   userId         String   @unique
+  setupSource    String   @default("linkedin_posts")
+  foundationKey  String?
   samplePosts    String[]
   traits         String[]
+  dimensions     Json?
   sentenceLength String?
   formality      String?
   usesQuestions  Boolean  @default(false)

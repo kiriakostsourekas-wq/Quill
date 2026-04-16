@@ -162,6 +162,17 @@ export async function PATCH(
     );
   }
 
+  const nextPostType = parsed.data.postType ?? existing.postType;
+  if (nextPostType === "carousel" && nextStatus === "scheduled") {
+    return NextResponse.json(
+      {
+        error:
+          "LinkedIn carousels publish directly right now. Save them as drafts or publish them from the Carousel page.",
+      },
+      { status: 409 }
+    );
+  }
+
   if (nextStatus === "scheduled" && !AUTO_SCHEDULING_ENABLED) {
     return NextResponse.json(
       { error: AUTO_SCHEDULING_UNAVAILABLE_MESSAGE },
@@ -169,7 +180,6 @@ export async function PATCH(
     );
   }
 
-  const nextPostType = parsed.data.postType ?? existing.postType;
   const nextCarouselMode =
     nextPostType === "carousel"
       ? parsed.data.carouselMode ?? existing.carouselMode ?? "builder"

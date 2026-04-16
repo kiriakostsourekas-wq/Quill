@@ -52,7 +52,7 @@ export function DashboardClient() {
   useEffect(() => {
     if (searchParams.get("welcome") !== "onboarding") return;
 
-    toast.success("Welcome to Quill! Start by training your Voice DNA →");
+    toast.success("Welcome to Quill. Set up your voice first, then head to Compose to generate in your voice.");
     router.replace("/dashboard");
   }, [router, searchParams]);
 

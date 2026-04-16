@@ -1,5 +1,6 @@
 import type { VoiceProfile } from "@prisma/client";
 import { groq } from "@/lib/groq";
+import { getVoiceDimensions, getVoiceProfilePromptContext } from "@/lib/voice-foundations";
 import { prisma } from "@/lib/prisma";
 import { parseJsonObject } from "@/lib/utils";
 
@@ -150,13 +151,12 @@ function pickWeakestSentence(text: string, weakestSentence?: string) {
 }
 
 function fallbackSuggestions(profile: VoiceProfile, weakestSentence: string) {
-  const traits = profile.traits.slice(0, 3);
-  const tone = traits.length > 0 ? traits.join(", ").toLowerCase() : "distinct";
+  const dimensions = getVoiceDimensions(profile);
 
   return [
-    `Lead with a sharper first-person sentence that feels more ${tone} than "${weakestSentence}".`,
-    `Replace the generic phrasing with a more personal statement that mirrors your natural cadence.`,
-    `Tighten this idea into one vivid sentence that sounds like something you would actually post.`,
+    `Lead with ${dimensions.hookStyle.toLowerCase().replace(/\.$/, "")} while keeping the same core idea.`,
+    `Rewrite this as one sentence that matches your usual paragraph style and pacing.`,
+    `Use wording that feels more ${dimensions.orientation.toLowerCase().replace(/\.$/, "")} than "${weakestSentence}".`,
   ];
 }
 
@@ -196,11 +196,11 @@ export async function scoreVoiceText(
       {
         role: "system",
         content:
-          "Score this text 0-100 against this voice profile. Return ONLY valid JSON: { score: number, toneScore: number, rhythmScore: number, wordChoiceScore: number, feedback: string, tip: string, safeToPublish: boolean, weakestSentence: string, suggestions: string[] }. Tone score measures tone match, rhythm score measures sentence rhythm match, and wordChoiceScore measures vocabulary/phrase match. Also identify the single weakest sentence and provide 3 specific, actionable suggestions to make this post sound more like the user. Each suggestion should be one concrete sentence starting with an action verb. Return these as weakestSentence (string) and suggestions (string array of 3 items). Each suggestion should also work as a direct replacement option for the weakest sentence while keeping the same core meaning.",
+          "Score this text 0-100 against this voice profile. Return ONLY valid JSON: { score: number, toneScore: number, rhythmScore: number, wordChoiceScore: number, feedback: string, tip: string, safeToPublish: boolean, weakestSentence: string, suggestions: string[] }. Tone score measures whether the opening, posture, and overall feel match the user's established patterns. Rhythm score measures sentence length and paragraph flow. WordChoiceScore measures vocabulary, specificity, and phrasing. Feedback and tip must reference concrete writing habits from the profile, not vague adjectives. Also identify the single weakest sentence and provide 3 specific, actionable suggestions to make this post sound more like the user. Each suggestion should be one concrete sentence starting with an action verb, preserve the same core meaning, and reflect a recognizable voice pattern such as stronger claim-led hooks, shorter paragraphs, more practical language, less hedging, or clearer teaching structure.",
       },
       {
         role: "user",
-        content: `Voice profile: ${JSON.stringify(profile)}\n\nText:\n${text}`,
+        content: `Voice profile: ${JSON.stringify(getVoiceProfilePromptContext(profile))}\n\nText:\n${text}`,
       },
     ],
   });

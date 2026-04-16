@@ -2,6 +2,7 @@ import { z } from "zod";
 import { NextRequest, NextResponse } from "next/server";
 import { requireRequestUser } from "@/lib/auth";
 import { groq } from "@/lib/groq";
+import { getVoiceProfilePromptContext } from "@/lib/voice-foundations";
 import { prisma } from "@/lib/prisma";
 import { parseJsonArray } from "@/lib/utils";
 
@@ -53,7 +54,7 @@ export async function POST(request: NextRequest) {
     messages: [
       {
         role: "system",
-        content: `You are a LinkedIn content strategist who specializes in personal brand content. Generate exactly 5 LinkedIn post ideas for someone with this voice profile: ${JSON.stringify(voiceProfile)}.
+        content: `You are a LinkedIn content strategist who specializes in personal brand content. Generate exactly 5 LinkedIn post ideas for someone with this voice profile: ${JSON.stringify(getVoiceProfilePromptContext(voiceProfile))}.
 
 Their topics of interest: ${parsed.data.topics.join(", ")}.
 

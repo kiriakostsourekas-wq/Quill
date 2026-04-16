@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireRequestUser } from "@/lib/auth";
 import { groq } from "@/lib/groq";
 import { prisma } from "@/lib/prisma";
+import { getVoiceProfilePromptContext } from "@/lib/voice-foundations";
 import { readRequestJson } from "@/lib/utils";
 
 export const runtime = "nodejs";
@@ -50,11 +51,11 @@ export async function POST(request: NextRequest) {
         {
           role: "system",
           content:
-            "Rewrite this post to match the voice profile exactly. Return only the rewritten text.",
+            "Rewrite this post to match the voice profile exactly. Pay attention to concrete habits like hook style, paragraph breaks, sentence length, directness, practical vs reflective orientation, and language density. Return only the rewritten text.",
         },
         {
           role: "user",
-          content: `Voice profile: ${JSON.stringify(profile)}\n\nPost:\n${parsed.data.text}`,
+          content: `Voice profile: ${JSON.stringify(getVoiceProfilePromptContext(profile))}\n\nPost:\n${parsed.data.text}`,
         },
       ],
     });

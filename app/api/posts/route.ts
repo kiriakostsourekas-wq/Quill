@@ -162,6 +162,16 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  if (parsed.data.postType === "carousel" && scheduledAt) {
+    return NextResponse.json(
+      {
+        error:
+          "LinkedIn carousels publish directly right now. Save them as drafts or publish them from the Carousel page.",
+      },
+      { status: 409 }
+    );
+  }
+
   if (scheduledAt && !AUTO_SCHEDULING_ENABLED) {
     return NextResponse.json(
       { error: AUTO_SCHEDULING_UNAVAILABLE_MESSAGE },

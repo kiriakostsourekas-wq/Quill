@@ -43,7 +43,7 @@ const steps = [
     icon: Send,
     title: "Publish everywhere",
     description:
-      "Schedule to LinkedIn and X from one workflow. Quill adapts the post while protecting your voice.",
+      "Publish text posts to LinkedIn and X from one workflow, or publish LinkedIn carousels directly without leaving Quill.",
   },
 ];
 
@@ -62,9 +62,9 @@ const features = [
   },
   {
     icon: Clock3,
-    title: "Smart scheduling",
+    title: "Text post scheduling",
     description:
-      "Queue posts for the right moment or publish instantly when the draft is ready and the voice score is strong.",
+      "Queue LinkedIn and X text posts for the right moment or publish instantly when the draft is ready.",
   },
 ];
 
@@ -104,7 +104,7 @@ const plans = [
     features: [
       "Everything in Beta",
       "Authenticity history analytics",
-      "Advanced carousel publishing",
+      "LinkedIn carousel publishing",
       "Premium Voice DNA tooling",
     ],
     featured: true,
@@ -118,7 +118,7 @@ const faqs = [
   },
   {
     q: "Which platforms do you support?",
-    a: "Quill currently supports LinkedIn and X. You can start with one and connect the other later from Settings.",
+    a: "Quill currently supports text posts on LinkedIn and X, plus direct LinkedIn PDF/carousel publishing. Native LinkedIn image posts and scheduled carousel publishing are not live yet.",
   },
   {
     q: "Do I need to log in immediately?",
@@ -259,8 +259,8 @@ export default async function HomePage() {
           </h1>
 
           <p className="mx-auto mt-6 max-w-xl text-lg leading-relaxed text-muted">
-            Quill learns your writing voice, adapts posts for LinkedIn and X, and handles
-            scheduling so your publishing scales without becoming generic.
+            Quill learns your writing voice, helps you publish text posts to LinkedIn and X, and
+            lets you publish LinkedIn carousels directly without becoming generic.
           </p>
 
           <div className="mt-10">

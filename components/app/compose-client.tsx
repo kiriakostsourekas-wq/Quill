@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { format } from "date-fns";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Check, Loader2, X } from "lucide-react";
+import { Check, Lightbulb, ListTree, Loader2, Sparkles, X } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { KeyboardHint } from "@/components/app/keyboard-hint";
@@ -11,6 +11,11 @@ import { IdeasClient } from "@/components/app/ideas-client";
 import { VoiceDnaPanel } from "@/components/app/voice-dna-panel";
 import { VoiceScoreBadge } from "@/components/app/voice-score-badge";
 import { Button } from "@/components/ui/button";
+import {
+  getVoiceDimensions,
+  getVoiceProfileStrength,
+  type VoiceDimensions,
+} from "@/lib/voice-foundations";
 import {
   AUTO_SCHEDULING_ENABLED,
   AUTO_SCHEDULING_UNAVAILABLE_MESSAGE,
@@ -31,8 +36,18 @@ type VoiceScore = {
   summary?: string | null;
 };
 
+type VoiceProfileSummary = {
+  setupSource?: string | null;
+  foundationKey?: string | null;
+  samplePosts?: string[];
+  traits: string[];
+  dimensions?: VoiceDimensions | null;
+  summary?: string | null;
+};
+
 type PlatformMode = "linkedin" | "twitter" | "both";
 type PublishPlatform = "linkedin" | "twitter";
+type WritingMode = "idea" | "notes" | "draft";
 type ComposeSuccessState =
   | {
       kind: "published";
@@ -47,6 +62,52 @@ const platformTabs: { label: string; value: PlatformMode }[] = [
   { label: "LinkedIn", value: "linkedin" },
   { label: "X", value: "twitter" },
   { label: "Both", value: "both" },
+];
+
+const writingModes: {
+  value: WritingMode;
+  label: string;
+  eyebrow: string;
+  title: string;
+  description: string;
+  placeholder: string;
+  icon: typeof Lightbulb;
+  actionLabel: string;
+}[] = [
+  {
+    value: "idea",
+    label: "Start from an idea",
+    eyebrow: "Workflow 1",
+    title: "Turn a topic into a first draft in your voice",
+    description:
+      "Drop in a topic, hook, or angle. Quill will write the first pass in your tone so you can shape it faster.",
+    placeholder: "Example: A post about why consistency beats hacks when you're building a personal brand.",
+    icon: Lightbulb,
+    actionLabel: "Generate in my voice",
+  },
+  {
+    value: "notes",
+    label: "Rewrite rough notes",
+    eyebrow: "Workflow 2",
+    title: "Transform bullets into a polished post",
+    description:
+      "Paste fragments, bullets, or half-formed thoughts. Quill will turn them into something publishable in your voice.",
+    placeholder:
+      "Example:\n- launched feature late because quality mattered\n- customers noticed the extra polish\n- lesson: speed matters, but trust matters more",
+    icon: ListTree,
+    actionLabel: "Generate in my voice",
+  },
+  {
+    value: "draft",
+    label: "Improve existing draft",
+    eyebrow: "Workflow 3",
+    title: "Refine a draft without sanding off your voice",
+    description:
+      "Bring a rough draft into the editor below, then let Quill tighten the structure, phrasing, and clarity while keeping it yours.",
+    placeholder: "",
+    icon: Sparkles,
+    actionLabel: "Improve in my voice",
+  },
 ];
 
 const emptyVoiceState: VoiceScore = {
@@ -124,12 +185,17 @@ export function ComposeClient() {
   const postId = searchParams.get("postId");
   const ideaPrefill = searchParams.get("idea");
   const scheduledAtPrefill = searchParams.get("scheduledAt");
+  const [writingMode, setWritingMode] = useState<WritingMode>(postId ? "draft" : ideaPrefill ? "idea" : "idea");
   const [platform, setPlatform] = useState<PlatformMode>("both");
+  const [ideaInput, setIdeaInput] = useState("");
+  const [notesInput, setNotesInput] = useState("");
   const [content, setContent] = useState("");
+  const [voiceProfile, setVoiceProfile] = useState<VoiceProfileSummary | null>(null);
   const [voice, setVoice] = useState<VoiceScore>(emptyVoiceState);
   const [loadingScore, setLoadingScore] = useState(false);
   const [saving, setSaving] = useState(false);
   const [publishing, setPublishing] = useState(false);
+  const [copilotLoading, setCopilotLoading] = useState(false);
   const [scheduleOpen, setScheduleOpen] = useState(false);
   const [scheduledAt, setScheduledAt] = useState("");
   const [firstComment, setFirstComment] = useState("");
@@ -156,6 +222,15 @@ export function ComposeClient() {
     } catch {
       return fallback;
     }
+  }, []);
+
+  useEffect(() => {
+    fetch("/api/me")
+      .then((response) => response.json())
+      .then((data) => {
+        setVoiceProfile(data.user?.voiceProfile ?? null);
+      })
+      .catch(() => undefined);
   }, []);
 
   useEffect(() => {
@@ -195,6 +270,7 @@ export function ComposeClient() {
               ? "linkedin"
               : "twitter";
         setPlatform(mode);
+        setWritingMode("draft");
       })
       .catch((error) => {
         if (cancelled) return;
@@ -216,7 +292,8 @@ export function ComposeClient() {
       return;
     }
 
-    setContent(ideaPrefill);
+    setWritingMode("idea");
+    setIdeaInput(ideaPrefill);
     setShowIdeaBanner(true);
     setPlatform("linkedin");
   }, [ideaPrefill, postId]);
@@ -318,14 +395,18 @@ export function ComposeClient() {
     }
 
     setContent("");
+    setIdeaInput("");
+    setNotesInput("");
     setFirstComment("");
     setFirstCommentOpen(false);
+    setWritingMode("idea");
     setPlatform("linkedin");
     setVoice(emptyVoiceState);
     setScheduleOpen(false);
     setScheduledAt("");
     setLoadingScore(false);
     setRewriteLoading(false);
+    setCopilotLoading(false);
     setShowIdeaBanner(false);
 
     if (postId || scheduledAtPrefill || ideaPrefill) {
@@ -366,16 +447,111 @@ export function ComposeClient() {
     if (platform === "both") return ["linkedin", "twitter"];
     return [platform];
   }, [platform]);
+  const currentWritingMode = useMemo(
+    () => writingModes.find((mode) => mode.value === writingMode) ?? writingModes[0],
+    [writingMode]
+  );
+  const CurrentModeIcon = currentWritingMode.icon;
+  const modeInputValue = writingMode === "idea" ? ideaInput : notesInput;
   const supportsFirstComment = selectedPlatforms.includes("linkedin");
+  const profileStrength = voiceProfile ? getVoiceProfileStrength(voiceProfile) : null;
+  const profileDimensions = voiceProfile ? getVoiceDimensions(voiceProfile) : null;
+  const showWorkflowGuide = !content.trim() && !loadingExistingPost && !loadPostError;
 
   const showVoiceProfile = Boolean(voice.traits && voice.traits.length > 0);
   const shouldHighlightWeakest =
     showVoiceProfile && Boolean(content.trim()) && Boolean(voice.weakestSentence.trim());
   const canSubmit = Boolean(content.trim()) && !loadingExistingPost && !loadPostError;
+  const canRunCopilot =
+    writingMode === "draft" ? canSubmit : Boolean(modeInputValue.trim()) && !loadingExistingPost && !loadPostError;
+  const editorPlaceholder =
+    writingMode === "idea"
+      ? "Your generated draft will appear here. Tweak it, score it, and publish when it sounds right."
+      : writingMode === "notes"
+        ? "Quill will turn your rough notes into a cleaner draft here."
+        : "Paste or write a draft here, then refine it in your voice.";
   const highlightMarkup = useMemo(
     () => buildHighlightMarkup(content, voice.weakestSentence),
     [content, voice.weakestSentence]
   );
+
+  const streamDraftIntoEditor = useCallback(
+    async (
+      endpoint: string,
+      payload: Record<string, string>,
+      fallbackMessage: string
+    ) => {
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        throw new Error(await readResponseError(response, fallbackMessage));
+      }
+
+      const reader = response.body?.getReader();
+      if (!reader) {
+        throw new Error(fallbackMessage);
+      }
+
+      const decoder = new TextDecoder();
+      let output = "";
+      setContent("");
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        output += decoder.decode(value, { stream: true });
+        setContent(output);
+      }
+    },
+    [readResponseError]
+  );
+
+  const rewriteInVoice = useCallback(async () => {
+    setRewriteLoading(true);
+    try {
+      await streamDraftIntoEditor(
+        "/api/voice/rewrite",
+        { text: content },
+        "Unable to rewrite post"
+      );
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Unable to rewrite post");
+    } finally {
+      setRewriteLoading(false);
+    }
+  }, [content, streamDraftIntoEditor]);
+
+  const runCopilot = useCallback(async () => {
+    if (!canRunCopilot) return;
+
+    if (writingMode === "draft") {
+      await rewriteInVoice();
+      return;
+    }
+
+    setCopilotLoading(true);
+    try {
+      await streamDraftIntoEditor(
+        "/api/voice/generate",
+        {
+          mode: writingMode,
+          input: modeInputValue,
+          platform,
+        },
+        "Unable to generate in your voice right now"
+      );
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Unable to generate in your voice right now"
+      );
+    } finally {
+      setCopilotLoading(false);
+    }
+  }, [canRunCopilot, modeInputValue, platform, rewriteInVoice, streamDraftIntoEditor, writingMode]);
 
   const saveOrUpdatePost = useCallback(async (payload: {
     content: string;
@@ -482,38 +658,6 @@ export function ComposeClient() {
     supportsFirstComment,
   ]);
 
-  async function rewriteInVoice() {
-    setRewriteLoading(true);
-    try {
-      const response = await fetch("/api/voice/rewrite", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: content }),
-      });
-
-      if (!response.ok) {
-        throw new Error(await readResponseError(response, "Unable to rewrite post"));
-      }
-
-      const reader = response.body?.getReader();
-      const decoder = new TextDecoder();
-      let output = "";
-
-      if (!reader) return;
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        output += decoder.decode(value, { stream: true });
-        setContent(output);
-      }
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Unable to rewrite post");
-    } finally {
-      setRewriteLoading(false);
-    }
-  }
-
   useEffect(() => {
     const isMac = typeof navigator !== "undefined" && /(Mac|iPhone|iPad)/i.test(navigator.platform);
     const modifierKey = isMac ? "metaKey" : "ctrlKey";
@@ -566,9 +710,36 @@ export function ComposeClient() {
       <div>
         <h1 className="text-2xl font-semibold text-ink">Compose</h1>
         <p className="mt-1 text-sm text-muted">
-          Draft once, score against your voice, then publish or schedule.
+          Write in your voice faster. Generate, reshape, then use Voice DNA as a final quality
+          check.
         </p>
       </div>
+
+      {showWorkflowGuide && (
+        <div className="rounded-2xl border border-line bg-white px-4 py-4">
+          <div className="flex flex-wrap items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-brand">
+            <span>How Quill works</span>
+            <span className="h-1 w-1 rounded-full bg-brand/40" />
+            <span className="normal-case tracking-normal text-muted">
+              Set up your voice → generate → refine → publish
+            </span>
+          </div>
+          <div className="mt-4 grid gap-3 sm:grid-cols-4">
+            {[
+              ["1", "Set up your voice", "Give Quill real samples or start from a foundation."],
+              ["2", "Generate in your voice", "Start from an idea or rough notes instead of a blank page."],
+              ["3", "Refine with Voice DNA", "Use the score and suggestions as a final quality check."],
+              ["4", "Publish or schedule", "Post when it sounds right, not just when it scores high."],
+            ].map(([step, title, body]) => (
+              <div key={step} className="rounded-xl border border-line bg-slate-50 px-4 py-3">
+                <p className="text-xs font-semibold text-brand">{step}</p>
+                <p className="mt-2 text-sm font-medium text-ink">{title}</p>
+                <p className="mt-1 text-sm leading-6 text-muted">{body}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {successState ? (
         <div className="quill-card bg-brand-light px-6 py-12 text-center">
@@ -639,27 +810,126 @@ export function ComposeClient() {
             ))}
           </div>
 
-          <div className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-line bg-slate-50 px-4 py-3">
-            <div>
-              <p className="text-sm font-semibold text-ink">Draft Studio</p>
-              <p className="mt-1 text-xs text-muted">
-                Watch your Voice DNA score update as the draft sharpens.
-              </p>
+          <div className="mt-4 rounded-xl border border-line bg-slate-50 px-4 py-3 text-sm leading-6 text-muted">
+            <span className="font-medium text-ink">Format support today:</span> this editor
+            publishes text posts to LinkedIn and X. LinkedIn first comments are supported when
+            LinkedIn is selected. Use <span className="font-medium text-ink">Carousel</span> for
+            PDF/document posts. Native image-only LinkedIn posts are not live yet.
+          </div>
+
+          <div className="mt-5 rounded-2xl border border-line bg-slate-50 p-5">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div className="max-w-2xl">
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand">
+                  Writing copilot
+                </p>
+                <h2 className="mt-2 text-xl font-semibold text-ink">Write in your voice faster</h2>
+                <p className="mt-2 text-sm leading-6 text-muted">
+                  Pick a starting point, let Quill write the first pass in your voice, then use
+                  Voice DNA as a quick confidence check before you publish.
+                </p>
+              </div>
+              {profileStrength && (
+                <div
+                  className={`rounded-full border px-4 py-2 text-sm font-medium ${
+                    profileStrength.state === "weak"
+                      ? "border-red-200 bg-red-50 text-red-700"
+                      : profileStrength.state === "forming"
+                        ? "border-amber-200 bg-amber-50 text-amber-700"
+                        : "border-emerald-200 bg-emerald-50 text-emerald-700"
+                  }`}
+                >
+                  {profileStrength.label}
+                </div>
+              )}
             </div>
-            <VoiceScoreBadge
-              score={voice.score}
-              toneScore={voice.toneScore}
-              rhythmScore={voice.rhythmScore}
-              wordChoiceScore={voice.wordChoiceScore}
-              safeToPublish={voice.safeToPublish}
-              animate={animateScore}
-            />
+
+            <div className="mt-5 flex flex-wrap gap-2">
+              {writingModes.map((mode) => {
+                const ModeIcon = mode.icon;
+                return (
+                  <button
+                    key={mode.value}
+                    type="button"
+                    onClick={() => setWritingMode(mode.value)}
+                    className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition ${
+                      writingMode === mode.value
+                        ? "bg-brand text-white"
+                        : "border border-line bg-white text-muted hover:border-brand/20 hover:text-brand"
+                    }`}
+                  >
+                    <ModeIcon className="h-4 w-4" />
+                    {mode.label}
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="mt-5 rounded-2xl border border-line bg-white p-5">
+              <div className="flex items-start gap-3">
+                <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-brand-light text-brand">
+                  <CurrentModeIcon className="h-5 w-5" />
+                </span>
+                <div className="flex-1">
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-brand">
+                    {currentWritingMode.eyebrow}
+                  </p>
+                  <h3 className="mt-1 text-lg font-semibold text-ink">{currentWritingMode.title}</h3>
+                  <p className="mt-2 text-sm leading-6 text-muted">{currentWritingMode.description}</p>
+                  {profileStrength && (
+                    <p className="mt-2 text-sm leading-6 text-muted">{profileStrength.note}</p>
+                  )}
+                </div>
+              </div>
+
+              {writingMode !== "draft" ? (
+                <div className="mt-5">
+                  <label className="block text-sm font-medium text-ink">
+                    {writingMode === "idea" ? "Idea or angle" : "Rough notes"}
+                  </label>
+                  <textarea
+                    value={modeInputValue}
+                    onChange={(event) =>
+                      writingMode === "idea"
+                        ? setIdeaInput(event.target.value)
+                        : setNotesInput(event.target.value)
+                    }
+                    className="quill-textarea mt-3 min-h-[120px] bg-slate-50"
+                    placeholder={currentWritingMode.placeholder}
+                  />
+                </div>
+              ) : (
+                <div className="mt-5 rounded-xl border border-dashed border-line bg-slate-50 px-4 py-4 text-sm leading-6 text-muted">
+                  Paste or shape your draft below, then let Quill tighten it in your voice without
+                  flattening the personality out of it.
+                </div>
+              )}
+
+              <div className="mt-5 flex flex-wrap items-center gap-3">
+                <Button
+                  onClick={() => {
+                    void runCopilot();
+                  }}
+                  disabled={copilotLoading || rewriteLoading || !canRunCopilot}
+                  className="gap-2"
+                >
+                  {copilotLoading || rewriteLoading ? "Working..." : currentWritingMode.actionLabel}
+                </Button>
+                <p className="text-sm text-muted">
+                  {writingMode === "idea"
+                    ? "Start from a spark and let Quill build the first draft in your voice."
+                    : writingMode === "notes"
+                      ? "Turn rough thinking into a clean post before you start refining."
+                      : "Use Quill to tighten the draft, then use Voice DNA to pressure-test it."}
+                </p>
+              </div>
+            </div>
           </div>
 
           {showIdeaBanner && (
             <div className="mt-5 flex items-start justify-between gap-3 rounded-xl border border-brand/20 bg-brand-light/40 px-4 py-3 text-sm text-muted">
               <p>
-                Starting from an idea — expand it in your voice.
+                Idea loaded — generate a draft in your voice, then refine it below.
               </p>
               <button
                 type="button"
@@ -672,7 +942,31 @@ export function ComposeClient() {
             </div>
           )}
 
-          <div className="relative mt-5">
+          <div className="mt-5 flex flex-wrap items-start justify-between gap-4 rounded-2xl border border-line bg-white px-4 py-4">
+            <div>
+              <p className="text-sm font-semibold text-ink">Working draft</p>
+              <p className="mt-1 text-xs text-muted">
+                {writingMode === "draft"
+                  ? "Refine the draft here, then use Voice DNA as a final check."
+                  : "Quill writes the first pass. You shape it here before it goes live."}
+              </p>
+            </div>
+            <div className="flex items-center gap-3">
+              <span className="text-xs font-semibold uppercase tracking-[0.16em] text-muted">
+                Voice check
+              </span>
+              <VoiceScoreBadge
+                score={voice.score}
+                toneScore={voice.toneScore}
+                rhythmScore={voice.rhythmScore}
+                wordChoiceScore={voice.wordChoiceScore}
+                safeToPublish={voice.safeToPublish}
+                animate={animateScore}
+              />
+            </div>
+          </div>
+
+          <div className="relative mt-4">
             {shouldHighlightWeakest && (
               <div
                 ref={highlightRef}
@@ -698,7 +992,7 @@ export function ComposeClient() {
                     }
                   : undefined
               }
-              placeholder="Write your post here..."
+              placeholder={editorPlaceholder}
             />
           </div>
 
@@ -788,6 +1082,8 @@ export function ComposeClient() {
         {!loadingExistingPost && !loadPostError && (
           <VoiceDnaPanel
             voice={voice}
+            profileDimensions={profileDimensions}
+            profileStrength={profileStrength}
             loadingScore={loadingScore}
             rewriteLoading={rewriteLoading}
             animateScore={animateScore}

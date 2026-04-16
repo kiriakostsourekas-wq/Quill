@@ -100,27 +100,15 @@ export function ScheduledClient() {
   }
 
   async function retryPost(post: PostRecord) {
-    const response =
-      post.postType === "carousel"
-        ? await fetch("/api/carousel/publish", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              postId: post.id,
-              slides: post.carouselSlides ?? [],
-              coverSlide: post.coverSlide ?? false,
-              firstComment: post.firstComment ?? null,
-            }),
-          })
-        : await fetch("/api/publish/now", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              postId: post.id,
-              content: post.content,
-              platforms: post.platforms,
-            }),
-          });
+    const response = await fetch("/api/publish/now", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        postId: post.id,
+        content: post.content,
+        platforms: post.platforms,
+      }),
+    });
     if (!response.ok) {
       toast.error(await readResponseError(response, "Unable to retry publishing"));
       return;
@@ -134,7 +122,8 @@ export function ScheduledClient() {
       <div>
         <h1 className="text-2xl font-semibold text-ink">Scheduled</h1>
         <p className="mt-1 text-sm text-muted">
-          Manage upcoming, draft, published, and failed posts.
+          Manage text-post scheduling, drafts, published posts, and failed posts. LinkedIn
+          carousels stay draft-or-publish-now only.
         </p>
       </div>
 
@@ -177,20 +166,35 @@ export function ScheduledClient() {
           </div>
         ) : (
           visiblePosts.map((post) => {
+            const isCarousel = post.postType === "carousel";
             const hasPublishedDelivery =
               post.deliveries?.some((delivery) => delivery.status === "published") ?? false;
             const hasRemainingUnpublished =
               post.deliveries?.some((delivery) => delivery.status !== "published") ?? false;
             const canRetry = post.status === "failed" && hasRemainingUnpublished;
-            const canEdit = post.status !== "publishing" && !hasPublishedDelivery && !canRetry;
+            const canEdit =
+              post.status !== "publishing" && !hasPublishedDelivery && (!canRetry || isCarousel);
             const canDelete = post.status !== "publishing" && !hasPublishedDelivery;
 
             return (
               <div key={post.id} className="flex flex-col gap-4 px-5 py-4 lg:flex-row lg:items-center">
                 <div className="min-w-0 flex-1">
-                  {post.postType === "carousel" ? (
-                    <div className="inline-flex rounded-full bg-brand-light px-3 py-1 text-xs font-medium text-brand">
-                      Carousel
+                  {isCarousel ? (
+                    <div>
+                      <div className="inline-flex rounded-full bg-brand-light px-3 py-1 text-xs font-medium text-brand">
+                        Carousel
+                      </div>
+                      {post.status === "scheduled" && (
+                        <p className="mt-2 text-xs text-amber-700">
+                          Automatic scheduling is not available for carousels. Open this draft from
+                          the Carousel page and publish it directly.
+                        </p>
+                      )}
+                      {post.status === "failed" && (
+                        <p className="mt-2 text-xs text-muted">
+                          Review this carousel in the editor before publishing it again.
+                        </p>
+                      )}
                     </div>
                   ) : (
                     <p className="line-clamp-2 text-sm leading-6 text-ink">{post.content}</p>
@@ -218,16 +222,16 @@ export function ScheduledClient() {
                 </div>
 
                 <div className="flex items-center gap-2">
-                  {canRetry ? (
+                  {canRetry && !isCarousel ? (
                     <Button variant="outline" className="gap-2" onClick={() => retryPost(post)}>
                       <RotateCcw className="h-4 w-4" />
                       Retry publish
                     </Button>
                   ) : canEdit ? (
-                    <Link href={`${post.postType === "carousel" ? "/carousel" : "/compose"}?postId=${post.id}`}>
+                    <Link href={`${isCarousel ? "/carousel" : "/compose"}?postId=${post.id}`}>
                       <Button variant="outline" className="gap-2">
                         <Pencil className="h-4 w-4" />
-                        Edit
+                        {isCarousel ? "Open carousel" : "Edit"}
                       </Button>
                     </Link>
                   ) : (

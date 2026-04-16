@@ -543,6 +543,15 @@ export function CalendarClient() {
             </div>
 
             <div className="mt-6 space-y-4">
+              {selectedPost.postType === "carousel" && selectedPost.status === "scheduled" && (
+                <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+                  <p className="text-sm font-medium text-amber-800">Carousel scheduling is not live</p>
+                  <p className="mt-2 text-sm leading-6 text-amber-700">
+                    This carousel draft needs to be opened from the Carousel page and published
+                    directly to LinkedIn.
+                  </p>
+                </div>
+              )}
               {selectedPost.voiceFeedback && (
                 <div className="rounded-xl border border-line bg-slate-50 p-4">
                   <p className="text-sm font-medium text-ink">Voice DNA summary</p>
