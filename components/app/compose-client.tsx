@@ -18,7 +18,6 @@ import {
 } from "@/lib/voice-foundations";
 import {
   AUTO_SCHEDULING_ENABLED,
-  AUTO_SCHEDULING_UNAVAILABLE_MESSAGE,
 } from "@/lib/scheduling";
 
 type VoiceScore = {
@@ -664,7 +663,6 @@ export function ComposeClient() {
 
     function handleKeyDown(event: KeyboardEvent) {
       const hasModifier = modifierKey === "metaKey" ? event.metaKey : event.ctrlKey;
-
       if (!hasModifier) {
         return;
       }
@@ -770,8 +768,8 @@ export function ComposeClient() {
           </div>
         </div>
       ) : (
-      <div className="grid gap-6 xl:grid-cols-[1.6fr_0.9fr]">
-        <div className="quill-card p-6">
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(320px,360px)] xl:items-start">
+        <div className="quill-card p-5 lg:p-6">
           {loadingExistingPost ? (
             <div className="flex min-h-[420px] flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-line bg-slate-50 text-center">
               <Loader2 className="h-6 w-6 animate-spin text-brand" />
@@ -793,31 +791,46 @@ export function ComposeClient() {
             </div>
           ) : (
           <>
-          <div className="flex flex-wrap gap-2">
-            {platformTabs.map((tab) => (
-              <button
-                key={tab.value}
-                type="button"
-                onClick={() => setPlatform(tab.value)}
-                className={`rounded-full px-4 py-2 text-sm font-medium transition ${
-                  platform === tab.value
-                    ? "bg-brand text-white"
-                    : "border border-line bg-white text-muted hover:border-brand/20 hover:text-brand"
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex flex-wrap gap-2">
+              {platformTabs.map((tab) => (
+                <button
+                  key={tab.value}
+                  type="button"
+                  onClick={() => setPlatform(tab.value)}
+                  className={`rounded-full px-4 py-2 text-sm font-medium transition ${
+                    platform === tab.value
+                      ? "bg-brand text-white"
+                      : "border border-line bg-white text-muted hover:border-brand/20 hover:text-brand"
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+            {profileStrength && (
+              <div
+                className={`rounded-full border px-3 py-1.5 text-xs font-medium ${
+                  profileStrength.state === "weak"
+                    ? "border-red-200 bg-red-50 text-red-700"
+                    : profileStrength.state === "forming"
+                      ? "border-amber-200 bg-amber-50 text-amber-700"
+                      : "border-emerald-200 bg-emerald-50 text-emerald-700"
                 }`}
               >
-                {tab.label}
-              </button>
-            ))}
+                {profileStrength.label}
+              </div>
+            )}
           </div>
 
-          <div className="mt-4 rounded-xl border border-line bg-slate-50 px-4 py-3 text-sm leading-6 text-muted">
-            <span className="font-medium text-ink">Format support today:</span> this editor
-            publishes text posts to LinkedIn and X. LinkedIn first comments are supported when
-            LinkedIn is selected. Use <span className="font-medium text-ink">Carousel</span> for
-            PDF/document posts. Native image-only LinkedIn posts are not live yet.
+          <div className="mt-3 rounded-xl border border-line bg-slate-50/80 px-4 py-3 text-sm leading-6 text-muted">
+            <span className="font-medium text-ink">Format support today:</span> this workspace is
+            for text posts on LinkedIn and X. LinkedIn first comments are supported. Use{" "}
+            <span className="font-medium text-ink">Carousel</span> for PDF/document posts. Native
+            image-only LinkedIn posts are not live yet.
           </div>
 
-          <div className="mt-5 rounded-2xl border border-line bg-slate-50 p-5">
+          <div className="mt-4 rounded-2xl border border-line bg-slate-50/80 p-4">
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div className="max-w-2xl">
                 <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand">
@@ -825,26 +838,13 @@ export function ComposeClient() {
                 </p>
                 <h2 className="mt-2 text-xl font-semibold text-ink">Write in your voice faster</h2>
                 <p className="mt-2 text-sm leading-6 text-muted">
-                  Pick a starting point, let Quill write the first pass in your voice, then use
+                  Pick a starting point, let Quill build the first pass in your voice, then use
                   Voice DNA as a quick confidence check before you publish.
                 </p>
               </div>
-              {profileStrength && (
-                <div
-                  className={`rounded-full border px-4 py-2 text-sm font-medium ${
-                    profileStrength.state === "weak"
-                      ? "border-red-200 bg-red-50 text-red-700"
-                      : profileStrength.state === "forming"
-                        ? "border-amber-200 bg-amber-50 text-amber-700"
-                        : "border-emerald-200 bg-emerald-50 text-emerald-700"
-                  }`}
-                >
-                  {profileStrength.label}
-                </div>
-              )}
             </div>
 
-            <div className="mt-5 flex flex-wrap gap-2">
+            <div className="mt-4 flex flex-wrap gap-2">
               {writingModes.map((mode) => {
                 const ModeIcon = mode.icon;
                 return (
@@ -865,7 +865,7 @@ export function ComposeClient() {
               })}
             </div>
 
-            <div className="mt-5 rounded-2xl border border-line bg-white p-5">
+            <div className="mt-4 rounded-xl border border-line bg-white p-4">
               <div className="flex items-start gap-3">
                 <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-brand-light text-brand">
                   <CurrentModeIcon className="h-5 w-5" />
@@ -874,8 +874,12 @@ export function ComposeClient() {
                   <p className="text-xs font-semibold uppercase tracking-[0.16em] text-brand">
                     {currentWritingMode.eyebrow}
                   </p>
-                  <h3 className="mt-1 text-lg font-semibold text-ink">{currentWritingMode.title}</h3>
-                  <p className="mt-2 text-sm leading-6 text-muted">{currentWritingMode.description}</p>
+                  <h3 className="mt-1 text-lg font-semibold text-ink">
+                    {currentWritingMode.title}
+                  </h3>
+                  <p className="mt-2 text-sm leading-6 text-muted">
+                    {currentWritingMode.description}
+                  </p>
                   {profileStrength && (
                     <p className="mt-2 text-sm leading-6 text-muted">{profileStrength.note}</p>
                   )}
@@ -883,7 +887,7 @@ export function ComposeClient() {
               </div>
 
               {writingMode !== "draft" ? (
-                <div className="mt-5">
+                <div className="mt-4">
                   <label className="block text-sm font-medium text-ink">
                     {writingMode === "idea" ? "Idea or angle" : "Rough notes"}
                   </label>
@@ -894,18 +898,18 @@ export function ComposeClient() {
                         ? setIdeaInput(event.target.value)
                         : setNotesInput(event.target.value)
                     }
-                    className="quill-textarea mt-3 min-h-[120px] bg-slate-50"
+                    className="quill-textarea mt-3 min-h-[112px] bg-slate-50"
                     placeholder={currentWritingMode.placeholder}
                   />
                 </div>
               ) : (
-                <div className="mt-5 rounded-xl border border-dashed border-line bg-slate-50 px-4 py-4 text-sm leading-6 text-muted">
+                <div className="mt-4 rounded-xl border border-dashed border-line bg-slate-50 px-4 py-4 text-sm leading-6 text-muted">
                   Paste or shape your draft below, then let Quill tighten it in your voice without
                   flattening the personality out of it.
                 </div>
               )}
 
-              <div className="mt-5 flex flex-wrap items-center gap-3">
+              <div className="mt-4 flex flex-wrap items-center gap-3">
                 <Button
                   onClick={() => {
                     void runCopilot();
@@ -942,139 +946,155 @@ export function ComposeClient() {
             </div>
           )}
 
-          <div className="mt-5 flex flex-wrap items-start justify-between gap-4 rounded-2xl border border-line bg-white px-4 py-4">
-            <div>
-              <p className="text-sm font-semibold text-ink">Working draft</p>
-              <p className="mt-1 text-xs text-muted">
-                {writingMode === "draft"
-                  ? "Refine the draft here, then use Voice DNA as a final check."
-                  : "Quill writes the first pass. You shape it here before it goes live."}
-              </p>
-            </div>
-            <div className="flex items-center gap-3">
-              <span className="text-xs font-semibold uppercase tracking-[0.16em] text-muted">
-                Voice check
-              </span>
-              <VoiceScoreBadge
-                score={voice.score}
-                toneScore={voice.toneScore}
-                rhythmScore={voice.rhythmScore}
-                wordChoiceScore={voice.wordChoiceScore}
-                safeToPublish={voice.safeToPublish}
-                animate={animateScore}
-              />
-            </div>
-          </div>
-
-          <div className="relative mt-4">
-            {shouldHighlightWeakest && (
-              <div
-                ref={highlightRef}
-                aria-hidden="true"
-                className="pointer-events-none absolute inset-0 overflow-auto rounded-md border border-line bg-white px-3 py-3 text-sm leading-6 text-ink"
-                dangerouslySetInnerHTML={{ __html: highlightMarkup }}
-              />
-            )}
-
-            <textarea
-              ref={textareaRef}
-              value={content}
-              onChange={(event) => setContent(event.target.value)}
-              onScroll={syncHighlightScroll}
-              className={`quill-textarea min-h-[320px] ${
-                shouldHighlightWeakest ? "relative bg-transparent text-transparent" : ""
-              }`}
-              style={
-                shouldHighlightWeakest
-                  ? {
-                      caretColor: "#1A1A1A",
-                      WebkitTextFillColor: "transparent",
-                    }
-                  : undefined
-              }
-              placeholder={editorPlaceholder}
-            />
-          </div>
-
-          <div className="mt-3 text-sm text-muted">{countLabel}</div>
-          {(platform === "twitter" || platform === "both") && (
-            <div className="mt-1 text-xs text-muted">
-              Posts over 280 chars will be auto-threaded.
-            </div>
-          )}
-          {supportsFirstComment && (
-            <div className="mt-2">
-              <button
-                type="button"
-                onClick={() => setFirstCommentOpen((current) => !current)}
-                className="text-sm font-medium text-brand hover:underline"
-              >
-                {firstCommentOpen ? "− Hide first comment" : "+ Add first comment"}
-              </button>
-            </div>
-          )}
-
-          {supportsFirstComment && firstCommentOpen && (
-            <div className="mt-4 rounded-xl border border-line bg-slate-50 p-4">
-              <label className="block text-sm font-medium text-ink">
-                First comment (optional)
-              </label>
-              <textarea
-                value={firstComment}
-                onChange={(event) => setFirstComment(event.target.value.slice(0, 1250))}
-                className="quill-textarea mt-3 min-h-[120px] bg-white"
-                placeholder="This will be posted as your first comment immediately after publishing. Great for dropping your link or adding context."
-              />
-            </div>
-          )}
-
-          <div className="mt-5 flex flex-wrap gap-3">
-            <Button variant="outline" onClick={saveDraft} disabled={saving || !canSubmit} className="gap-2">
-              <span>{saving ? "Saving..." : "Save draft"}</span>
-              {!saving && <KeyboardHint keys={`${shortcutModifier}S`} />}
-            </Button>
-            <Button
-              onClick={() => setScheduleOpen(true)}
-              disabled={!canSubmit || !AUTO_SCHEDULING_ENABLED}
-            >
-              Schedule post
-            </Button>
-            <Button variant="outline" onClick={publishNow} disabled={publishing || !canSubmit} className="gap-2">
-              <span>{publishing ? "Publishing..." : "Publish now"}</span>
-              {!publishing && <KeyboardHint keys={`${shortcutModifier}↵`} />}
-            </Button>
-          </div>
-          {!AUTO_SCHEDULING_ENABLED && (
-            <p className="mt-3 text-sm text-muted">
-              {AUTO_SCHEDULING_UNAVAILABLE_MESSAGE}
-            </p>
-          )}
-
-          {scheduleOpen && (
-            <div className="mt-5 rounded-xl border border-line bg-slate-50 p-4">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
-                <div className="flex-1">
-                  <label className="mb-2 block text-sm font-medium text-ink">
-                    Schedule date &amp; time
-                  </label>
-                  <input
-                    type="datetime-local"
-                    value={scheduledAt}
-                    onChange={(event) => setScheduledAt(event.target.value)}
-                    className="quill-input"
-                  />
-                </div>
-                <div className="flex gap-3">
-                  <Button variant="outline" onClick={() => setScheduleOpen(false)}>
-                    Cancel
-                  </Button>
-                  <Button onClick={scheduleCurrentPost} disabled={!scheduledAt || saving}>
-                    Confirm
-                  </Button>
-                </div>
+          <div className="mt-5 overflow-hidden rounded-2xl border border-line bg-white">
+            <div className="flex flex-wrap items-start justify-between gap-4 border-b border-line px-4 py-4">
+              <div>
+                <p className="text-sm font-semibold text-ink">Working draft</p>
+                <p className="mt-1 text-xs text-muted">
+                  {writingMode === "draft"
+                    ? "Refine the draft here, then use Voice DNA as a final check."
+                    : "Quill writes the first pass. You shape it here before it goes live."}
+                </p>
+              </div>
+              <div className="flex items-center gap-3">
+                <span className="text-xs font-semibold uppercase tracking-[0.16em] text-muted">
+                  Voice check
+                </span>
+                <VoiceScoreBadge
+                  score={voice.score}
+                  toneScore={voice.toneScore}
+                  rhythmScore={voice.rhythmScore}
+                  wordChoiceScore={voice.wordChoiceScore}
+                  safeToPublish={voice.safeToPublish}
+                  animate={animateScore}
+                  variant="compact"
+                />
               </div>
             </div>
-          )}
+
+            <div className="relative">
+              {shouldHighlightWeakest && (
+                <div
+                  ref={highlightRef}
+                  aria-hidden="true"
+                  className="pointer-events-none absolute inset-0 overflow-auto bg-white px-4 py-4 text-sm leading-6 text-ink"
+                  dangerouslySetInnerHTML={{ __html: highlightMarkup }}
+                />
+              )}
+
+              <textarea
+                ref={textareaRef}
+                value={content}
+                onChange={(event) => setContent(event.target.value)}
+                onScroll={syncHighlightScroll}
+                className={`quill-textarea min-h-[280px] rounded-none border-0 bg-transparent px-4 py-4 shadow-none ${
+                  shouldHighlightWeakest ? "relative bg-transparent text-transparent" : ""
+                }`}
+                style={
+                  shouldHighlightWeakest
+                    ? {
+                        caretColor: "#1A1A1A",
+                        WebkitTextFillColor: "transparent",
+                      }
+                    : undefined
+                }
+                placeholder={editorPlaceholder}
+              />
+            </div>
+
+            <div className="border-t border-line px-4 py-4">
+              <div className="flex flex-wrap items-start justify-between gap-3 text-sm text-muted">
+                <div>
+                  <p>{countLabel}</p>
+                  {(platform === "twitter" || platform === "both") && (
+                    <p className="mt-1 text-xs">Posts over 280 chars will be auto-threaded.</p>
+                  )}
+                </div>
+                {supportsFirstComment && (
+                  <button
+                    type="button"
+                    onClick={() => setFirstCommentOpen((current) => !current)}
+                    className="text-sm font-medium text-brand hover:underline"
+                  >
+                    {firstCommentOpen ? "− Hide first comment" : "+ Add first comment"}
+                  </button>
+                )}
+              </div>
+
+              {supportsFirstComment && firstCommentOpen && (
+                <div className="mt-4 rounded-xl border border-line bg-slate-50 p-4">
+                  <label className="block text-sm font-medium text-ink">
+                    First comment (optional)
+                  </label>
+                  <textarea
+                    value={firstComment}
+                    onChange={(event) => setFirstComment(event.target.value.slice(0, 1250))}
+                    className="quill-textarea mt-3 min-h-[120px] bg-white"
+                    placeholder="This will be posted as your first comment immediately after publishing. Great for dropping your link or adding context."
+                  />
+                </div>
+              )}
+
+              <div className="mt-4 flex flex-wrap gap-3">
+                <Button
+                  variant="outline"
+                  onClick={saveDraft}
+                  disabled={saving || !canSubmit}
+                  className="gap-2"
+                >
+                  <span>{saving ? "Saving..." : "Save draft"}</span>
+                  {!saving && <KeyboardHint keys={`${shortcutModifier}S`} />}
+                </Button>
+                <Button
+                  onClick={() => setScheduleOpen(true)}
+                  disabled={!canSubmit || !AUTO_SCHEDULING_ENABLED}
+                >
+                  Schedule post
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={publishNow}
+                  disabled={publishing || !canSubmit}
+                  className="gap-2"
+                >
+                  <span>{publishing ? "Publishing..." : "Publish now"}</span>
+                  {!publishing && <KeyboardHint keys={`${shortcutModifier}↵`} />}
+                </Button>
+              </div>
+
+              {!AUTO_SCHEDULING_ENABLED && (
+                <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                  Scheduling is currently turned off in this environment. Publish now still works.
+                </div>
+              )}
+
+              {scheduleOpen && (
+                <div className="mt-4 rounded-xl border border-line bg-slate-50 p-4">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+                    <div className="flex-1">
+                      <label className="mb-2 block text-sm font-medium text-ink">
+                        Schedule date &amp; time
+                      </label>
+                      <input
+                        type="datetime-local"
+                        value={scheduledAt}
+                        onChange={(event) => setScheduledAt(event.target.value)}
+                        className="quill-input"
+                      />
+                    </div>
+                    <div className="flex gap-3">
+                      <Button variant="outline" onClick={() => setScheduleOpen(false)}>
+                        Cancel
+                      </Button>
+                      <Button onClick={scheduleCurrentPost} disabled={!scheduledAt || saving}>
+                        Confirm
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
           </>
           )}
         </div>

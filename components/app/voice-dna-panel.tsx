@@ -76,7 +76,7 @@ export function VoiceDnaPanel({
   onRewrite: () => void;
   onApplySuggestion: (suggestion: string) => void;
 }) {
-  const hasVoiceProfile = Boolean(voice.traits && voice.traits.length > 0);
+  const hasVoiceProfile = Boolean(profileDimensions || profileStrength);
 
   return (
     <aside className="quill-card p-6 xl:sticky xl:top-24">
@@ -89,7 +89,7 @@ export function VoiceDnaPanel({
           <p className="mt-1 text-sm text-muted">
             {loadingScore
               ? "Checking how the current draft matches your voice..."
-              : "A live refinement signal for the draft Quill is helping you shape."}
+              : "A supporting quality check while you write and refine."}
           </p>
         </div>
         {hasVoiceProfile && (
@@ -117,19 +117,19 @@ export function VoiceDnaPanel({
             </div>
           )}
 
-          <div className="mt-8">
+          <div className="mt-6 rounded-2xl border border-line bg-slate-50 p-4">
             <VoiceScoreBadge
               score={voice.score}
               toneScore={voice.toneScore}
               rhythmScore={voice.rhythmScore}
               wordChoiceScore={voice.wordChoiceScore}
               safeToPublish={voice.safeToPublish}
-              variant="hero"
+              variant="pill"
               animate={animateScore}
             />
           </div>
 
-          <div className="mt-6 grid gap-3">
+          <div className="mt-4 grid gap-3">
             <BreakdownRow icon={Mic} label="Tone match" value={voice.toneScore} />
             <BreakdownRow icon={Activity} label="Sentence rhythm" value={voice.rhythmScore} />
             <BreakdownRow icon={Type} label="Word choice" value={voice.wordChoiceScore} />
