@@ -325,10 +325,13 @@ export function OnboardingClient() {
               {currentStep === "contrarianBelief" && (
                 <section className="space-y-8">
                   <h1 className="text-3xl font-semibold tracking-tight text-ink sm:text-4xl">
-                    What&apos;s one belief you hold about your field that most people would disagree
-                    with?
+                    Complete this sentence:
                   </h1>
                   <div className="space-y-4">
+                    <p className="text-base leading-7 text-muted">
+                      Most people think ___ is the key to success in [their field], but I believe
+                      it&apos;s actually ___.
+                    </p>
                     <textarea
                       autoFocus
                       maxLength={300}
@@ -340,7 +343,8 @@ export function OnboardingClient() {
                         }))
                       }
                       className="quill-textarea min-h-[200px] rounded-2xl px-4 text-base"
-                      aria-label="Contrarian belief"
+                      placeholder="e.g. Most people think consistency is the key, but I believe it's actually having a clear point of view."
+                      aria-label="Complete this sentence"
                     />
                     <div className="flex flex-col gap-3 sm:flex-row">
                       <Button

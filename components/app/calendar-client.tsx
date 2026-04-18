@@ -60,6 +60,8 @@ type CalendarEvent = {
 const weekdayLabels = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const weekHours = Array.from({ length: 18 }, (_, index) => 6 + index);
 const hourSlotHeight = 72;
+const hourLabelReferenceDate = new Date(2024, 0, 1);
+const calendarFallbackDate = new Date(2024, 0, 1);
 
 function platformDotClass(platform: string) {
   return platform === "linkedin" ? "bg-[#0A66C2]" : "bg-black";
@@ -114,14 +116,19 @@ async function readResponseError(response: Response, fallback: string) {
 export function CalendarClient() {
   const router = useRouter();
   const [view, setView] = useState<CalendarView>("month");
-  const [cursorDate, setCursorDate] = useState(new Date());
+  const [cursorDate, setCursorDate] = useState<Date | null>(null);
   const [posts, setPosts] = useState<CalendarPost[]>([]);
   const [selectedPost, setSelectedPost] = useState<CalendarPost | null>(null);
   const [loading, setLoading] = useState(true);
+  const activeCursorDate = cursorDate ?? calendarFallbackDate;
+
+  useEffect(() => {
+    setCursorDate(new Date());
+  }, []);
 
   const visibleRange = useMemo(
-    () => (view === "month" ? getMonthRange(cursorDate) : getWeekRange(cursorDate)),
-    [cursorDate, view]
+    () => (view === "month" ? getMonthRange(activeCursorDate) : getWeekRange(activeCursorDate)),
+    [activeCursorDate, view]
   );
 
   const events = useMemo<CalendarEvent[]>(() => {
@@ -146,11 +153,12 @@ export function CalendarClient() {
   );
 
   const weekDays = useMemo(
-    () => eachDayOfInterval(getWeekRange(cursorDate)),
+    () => (cursorDate ? eachDayOfInterval(getWeekRange(cursorDate)) : []),
     [cursorDate]
   );
 
   const hasCurrentMonthPosts = useMemo(() => {
+    if (!cursorDate) return false;
     const monthStart = startOfMonth(cursorDate);
     const monthEnd = endOfMonth(cursorDate);
     return events.some((event) => event.date >= monthStart && event.date <= monthEnd);
@@ -184,27 +192,31 @@ export function CalendarClient() {
   }, [visibleRange.end, visibleRange.start]);
 
   useEffect(() => {
+    if (!cursorDate) return;
     loadPosts().catch(() => undefined);
-  }, [loadPosts]);
+  }, [cursorDate, loadPosts]);
 
   useEffect(() => {
+    if (!cursorDate) return;
     const interval = setInterval(() => {
       void loadPosts({ silent: true });
     }, 60_000);
 
     return () => clearInterval(interval);
-  }, [loadPosts]);
+  }, [cursorDate, loadPosts]);
 
   function goPrevious() {
-    setCursorDate((current) =>
-      view === "month" ? subMonths(current, 1) : addDays(current, -7)
-    );
+    setCursorDate((current) => {
+      const baseDate = current ?? new Date();
+      return view === "month" ? subMonths(baseDate, 1) : addDays(baseDate, -7);
+    });
   }
 
   function goNext() {
-    setCursorDate((current) =>
-      view === "month" ? addMonths(current, 1) : addDays(current, 7)
-    );
+    setCursorDate((current) => {
+      const baseDate = current ?? new Date();
+      return view === "month" ? addMonths(baseDate, 1) : addDays(baseDate, 7);
+    });
   }
 
   function goToday() {
@@ -250,7 +262,7 @@ export function CalendarClient() {
         role="button"
         tabIndex={0}
         className={`relative min-h-[150px] border-b border-r border-line p-3 text-left transition hover:bg-slate-50 ${
-          isSameMonth(date, cursorDate) ? "bg-white" : "bg-slate-50/70"
+          isSameMonth(date, activeCursorDate) ? "bg-white" : "bg-slate-50/70"
         }`}
       >
         <div
@@ -355,9 +367,11 @@ export function CalendarClient() {
   }
 
   const heading =
-    view === "month"
-      ? format(cursorDate, "MMMM yyyy")
-      : `${format(weekDays[0], "MMMM d")} – ${format(weekDays[weekDays.length - 1], "MMMM d, yyyy")}`;
+    !cursorDate
+      ? "Loading calendar..."
+      : view === "month"
+        ? format(cursorDate, "MMMM yyyy")
+        : `${format(weekDays[0], "MMMM d")} – ${format(weekDays[weekDays.length - 1], "MMMM d, yyyy")}`;
 
   return (
     <section className="space-y-6">
@@ -406,7 +420,7 @@ export function CalendarClient() {
       </div>
 
       <div className="quill-card relative overflow-hidden">
-        {loading ? (
+        {loading || !cursorDate ? (
           <div className="flex min-h-[720px] items-center justify-center text-sm text-muted">
             Loading calendar...
           </div>
@@ -463,7 +477,7 @@ export function CalendarClient() {
                     key={hour}
                     className="flex h-[72px] items-start justify-end border-b border-line pr-3 pt-2 text-xs text-muted"
                   >
-                    {format(set(new Date(), { hours: hour, minutes: 0 }), "ha")}
+                    {format(set(hourLabelReferenceDate, { hours: hour, minutes: 0 }), "ha")}
                   </div>
                 ))}
               </div>

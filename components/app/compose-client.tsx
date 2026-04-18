@@ -206,14 +206,11 @@ export function ComposeClient() {
   const [animateScore, setAnimateScore] = useState(false);
   const [loadingExistingPost, setLoadingExistingPost] = useState(Boolean(postId));
   const [loadPostError, setLoadPostError] = useState<string | null>(null);
+  const [shortcutModifier, setShortcutModifier] = useState("Ctrl");
   const debounceRef = useRef<NodeJS.Timeout | null>(null);
   const successTimerRef = useRef<NodeJS.Timeout | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const highlightRef = useRef<HTMLDivElement | null>(null);
-  const shortcutModifier = useMemo(
-    () => (typeof navigator !== "undefined" && /(Mac|iPhone|iPad)/i.test(navigator.platform) ? "⌘" : "Ctrl"),
-    []
-  );
 
   const readResponseError = useCallback(async (response: Response, fallback: string) => {
     try {
@@ -221,6 +218,12 @@ export function ComposeClient() {
       return data.error ?? fallback;
     } catch {
       return fallback;
+    }
+  }, []);
+
+  useEffect(() => {
+    if (/(Mac|iPhone|iPad)/i.test(navigator.platform)) {
+      setShortcutModifier("⌘");
     }
   }, []);
 

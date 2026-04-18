@@ -56,12 +56,8 @@ export function AppShell({ user, children }: AppShellProps) {
   const [commandQuery, setCommandQuery] = useState("");
   const [connectedPlatforms, setConnectedPlatforms] = useState<string[] | null>(null);
   const [dismissedConnectXBanner, setDismissedConnectXBanner] = useState(false);
+  const [modifierLabel, setModifierLabel] = useState("Ctrl");
   const paletteInputRef = useRef<HTMLInputElement | null>(null);
-  const isMac = useMemo(
-    () => typeof navigator !== "undefined" && /(Mac|iPhone|iPad)/i.test(navigator.platform),
-    []
-  );
-  const modifierLabel = isMac ? "⌘" : "Ctrl";
   const initials = useMemo(
     () =>
       user.name
@@ -83,6 +79,12 @@ export function AppShell({ user, children }: AppShellProps) {
       setDismissedConnectXBanner(false);
     }
   }, [connectXBannerStorageKey]);
+
+  useEffect(() => {
+    if (/(Mac|iPhone|iPad)/i.test(navigator.platform)) {
+      setModifierLabel("⌘");
+    }
+  }, []);
 
   useEffect(() => {
     fetch("/api/accounts")
