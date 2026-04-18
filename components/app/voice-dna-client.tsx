@@ -11,6 +11,7 @@ import {
   getVoiceDimensions,
   getVoiceProfileStrength,
   getVoiceSetupSourceLabel,
+  type VoiceProfileSampleSignal,
   voiceDimensionLabels,
   voiceFoundations,
   type VoiceDimensions,
@@ -23,6 +24,7 @@ type VoiceProfile = {
   foundationKey?: string | null;
   traits: string[];
   dimensions?: VoiceDimensions | null;
+  sampleSignal?: Partial<VoiceProfileSampleSignal> | null;
   sentenceLength?: string | null;
   formality?: string | null;
   usesQuestions: boolean;

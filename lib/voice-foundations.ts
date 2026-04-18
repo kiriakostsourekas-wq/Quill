@@ -27,10 +27,17 @@ export type VoiceProfileStrength = {
   note: string;
 };
 
+export type VoiceProfileSampleSignal = {
+  substantialSampleCount: number;
+  uniqueSampleCount: number;
+  totalSampleLength: number;
+};
+
 export type VoiceProfileLike = {
   setupSource?: string | null;
   foundationKey?: string | null;
   samplePosts?: string[];
+  sampleSignal?: Partial<VoiceProfileSampleSignal> | null;
   traits?: string[];
   dimensions?: unknown;
   sentenceLength?: string | null;
@@ -272,6 +279,10 @@ function asStringArray(value: unknown, fallback: string[]) {
     : fallback;
 }
 
+function asNumber(value: unknown, fallback: number) {
+  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+}
+
 export function getVoiceFoundation(key: string | null | undefined) {
   return voiceFoundations.find((foundation) => foundation.key === key) ?? null;
 }
@@ -362,9 +373,98 @@ export function getVoiceDimensions(profile: VoiceProfileLike): VoiceDimensions {
   };
 }
 
-export function getVoiceProfilePromptContext(profile: VoiceProfileLike) {
+export function getVoiceProfileSampleSignal(profile: VoiceProfileLike): VoiceProfileSampleSignal {
+  const candidate = asObject(profile.sampleSignal);
+  if (candidate) {
+    return {
+      substantialSampleCount: Math.max(
+        0,
+        Math.round(asNumber(candidate.substantialSampleCount, 0))
+      ),
+      uniqueSampleCount: Math.max(0, Math.round(asNumber(candidate.uniqueSampleCount, 0))),
+      totalSampleLength: Math.max(0, Math.round(asNumber(candidate.totalSampleLength, 0))),
+    };
+  }
+
+  const normalizedSamples = (profile.samplePosts ?? [])
+    .map((sample) => sample.trim())
+    .filter(Boolean);
+  const substantiveSamples = normalizedSamples.filter((sample) => sample.length >= 40);
+
+  return {
+    substantialSampleCount: substantiveSamples.length,
+    uniqueSampleCount: new Set(
+      normalizedSamples.map((sample) => sample.toLowerCase().replace(/\s+/g, " "))
+    ).size,
+    totalSampleLength: substantiveSamples.reduce((sum, sample) => sum + sample.length, 0),
+  };
+}
+
+export function getVoiceProfileStrength(profile: {
+  setupSource?: string | null;
+  foundationKey?: string | null;
+  samplePosts?: string[];
+  sampleSignal?: Partial<VoiceProfileSampleSignal> | null;
+}): VoiceProfileStrength {
+  const source = profile.setupSource ?? "linkedin_posts";
+  const signal = getVoiceProfileSampleSignal(profile);
+
+  if (source === "foundation") {
+    return {
+      state: "weak",
+      label: "Voice profile: weak",
+      note: "This is a starting foundation. Quill can help, but real writing samples will make the voice much more trustworthy.",
+    };
+  }
+
+  if (signal.substantialSampleCount < 2 || signal.totalSampleLength < 500) {
+    return {
+      state: "weak",
+      label: "Voice profile: weak",
+      note: "Quill has very limited signal right now. Add more authentic samples before trusting the voice too much.",
+    };
+  }
+
+  if (
+    signal.substantialSampleCount < 3 ||
+    signal.uniqueSampleCount < 3 ||
+    signal.totalSampleLength < 1100
+  ) {
+    return {
+      state: "forming",
+      label: "Voice profile: forming",
+      note: "Quill has enough to help, but another good sample or two will make generation and scoring more reliable.",
+    };
+  }
+
+  return {
+    state: "solid",
+    label: "Voice profile: solid",
+    note: "Quill has enough signal to generate, refine, and score with stronger confidence.",
+  };
+}
+
+export function getVoiceProfilePromptGuidance(profile: VoiceProfileLike) {
+  const strength = getVoiceProfileStrength(profile);
+
+  switch (strength.state) {
+    case "weak":
+      return "The voice profile is weak. Use only broad patterns from the profile, stay conservative, and prefer clear safe wording over distinctive imitation.";
+    case "forming":
+      return "The voice profile is forming. Follow the established patterns, but keep the language fresh and avoid overcommitting to any one pattern.";
+    default:
+      return "The voice profile is solid. Personalize confidently, but still imitate patterns rather than specific wording.";
+  }
+}
+
+export function getVoiceProfilePromptContext(
+  profile: VoiceProfileLike,
+  options?: { includeSamplePosts?: boolean }
+) {
   const foundation = getVoiceFoundation(profile.foundationKey);
   const dimensions = getVoiceDimensions(profile);
+  const sampleSignal = getVoiceProfileSampleSignal(profile);
+  const profileStrength = getVoiceProfileStrength(profile);
 
   return {
     setupSource: profile.setupSource ?? "linkedin_posts",
@@ -383,47 +483,28 @@ export function getVoiceProfilePromptContext(profile: VoiceProfileLike) {
     usesQuestions: profile.usesQuestions ?? false,
     usesLists: profile.usesLists ?? false,
     summary: profile.summary ?? null,
-    samplePosts: profile.samplePosts ?? [],
+    sampleSignal,
+    profileStrength: {
+      state: profileStrength.state,
+      note: profileStrength.note,
+    },
+    ...(options?.includeSamplePosts ? { samplePosts: profile.samplePosts ?? [] } : {}),
   };
 }
 
-export function getVoiceProfileStrength(profile: {
-  setupSource?: string | null;
-  foundationKey?: string | null;
-  samplePosts?: string[];
-}): VoiceProfileStrength {
-  const source = profile.setupSource ?? "linkedin_posts";
-  const samples = profile.samplePosts ?? [];
-  const substantiveSamples = samples.filter((sample) => sample.trim().length >= 40);
-  const totalLength = substantiveSamples.reduce((sum, sample) => sum + sample.trim().length, 0);
-
-  if (source === "foundation") {
-    return {
-      state: "weak",
-      label: "Voice profile: weak",
-      note: "This is a starting foundation. Quill can help, but real writing samples will make the voice much more trustworthy.",
-    };
-  }
-
-  if (substantiveSamples.length < 2 || totalLength < 300) {
-    return {
-      state: "weak",
-      label: "Voice profile: weak",
-      note: "Quill has very limited signal right now. Add more authentic samples before trusting the voice too much.",
-    };
-  }
-
-  if (substantiveSamples.length < 3 || totalLength < 900) {
-    return {
-      state: "forming",
-      label: "Voice profile: forming",
-      note: "Quill has enough to help, but another good sample or two will make generation and scoring more reliable.",
-    };
-  }
+export function getVoiceProfileClientState(profile: VoiceProfileLike | null | undefined) {
+  if (!profile) return null;
 
   return {
-    state: "solid",
-    label: "Voice profile: solid",
-    note: "Quill has enough signal to generate, refine, and score with stronger confidence.",
+    setupSource: profile.setupSource ?? "linkedin_posts",
+    foundationKey: profile.foundationKey ?? null,
+    traits: profile.traits ?? [],
+    dimensions: getVoiceDimensions(profile),
+    sentenceLength: profile.sentenceLength ?? null,
+    formality: profile.formality ?? null,
+    usesQuestions: profile.usesQuestions ?? false,
+    usesLists: profile.usesLists ?? false,
+    summary: profile.summary ?? null,
+    sampleSignal: getVoiceProfileSampleSignal(profile),
   };
 }

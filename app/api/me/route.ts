@@ -2,6 +2,7 @@ import { z } from "zod";
 import { NextRequest, NextResponse } from "next/server";
 import { getEffectivePlan, requireRequestUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { getVoiceProfileClientState } from "@/lib/voice-foundations";
 import { readRequestJson } from "@/lib/utils";
 
 const updateMeSchema = z.object({
@@ -22,8 +23,9 @@ export async function GET(request: NextRequest) {
       avatar: user.avatar,
       plan: getEffectivePlan(user),
       role: user.role,
+      mainTopic: user.mainTopic,
       topics: user.topics,
-      voiceProfile: user.voiceProfile,
+      voiceProfile: getVoiceProfileClientState(user.voiceProfile),
     },
   });
 }
@@ -65,8 +67,9 @@ export async function PATCH(request: NextRequest) {
       avatar: updatedUser.avatar,
       plan: getEffectivePlan(updatedUser),
       role: updatedUser.role,
+      mainTopic: updatedUser.mainTopic,
       topics: updatedUser.topics,
-      voiceProfile: updatedUser.voiceProfile,
+      voiceProfile: getVoiceProfileClientState(updatedUser.voiceProfile),
     },
   });
 }

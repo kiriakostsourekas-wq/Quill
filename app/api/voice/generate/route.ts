@@ -1,9 +1,8 @@
 import { z } from "zod";
 import { NextRequest, NextResponse } from "next/server";
 import { requireRequestUser } from "@/lib/auth";
-import { groq } from "@/lib/groq";
 import { prisma } from "@/lib/prisma";
-import { getVoiceProfilePromptContext } from "@/lib/voice-foundations";
+import { generatePatternBasedVoiceText } from "@/lib/voice-dna";
 import { readRequestJson } from "@/lib/utils";
 
 export const runtime = "nodejs";
@@ -61,61 +60,29 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  let completion;
   try {
-    completion = await groq.chat.completions.create({
-      model: "llama-3.3-70b-versatile",
-      stream: true,
-      messages: [
-        {
-          role: "system",
-          content: `You are Quill, a writing copilot that creates social posts in the user's exact voice.
+    const result = await generatePatternBasedVoiceText({
+      profile,
+      systemPrompt: `You are Quill, a writing copilot that creates social posts in the user's voice.
 
-Match their tone, sentence rhythm, formality, pacing, signature phrasing, hook style, paragraph structure, and practical vs reflective orientation closely.
+Match tone, sentence rhythm, formality, hook style, paragraph structure, and practical vs reflective orientation.
 Do not explain what you changed.
 Do not add labels, quotation marks, or intro text.
-Return only the finished post text.
 
 ${platformGuidance[parsed.data.platform]}`,
-        },
-        {
-          role: "user",
-          content: `Voice profile: ${JSON.stringify(getVoiceProfilePromptContext(profile))}\n\n${getPrompt(parsed.data.mode, parsed.data.input)}`,
-        },
-      ],
+      userPrompt: getPrompt(parsed.data.mode, parsed.data.input),
+    });
+    return new Response(result.text, {
+      headers: {
+        "Content-Type": "text/plain; charset=utf-8",
+        "Cache-Control": "no-store",
+      },
     });
   } catch (error) {
-    console.error("Voice generation failed to start", error);
+    console.error("Voice generation failed", error);
     return NextResponse.json(
       { error: "Unable to generate in your voice right now" },
       { status: 502 }
     );
   }
-
-  const encoder = new TextEncoder();
-  const stream = new ReadableStream({
-    async start(controller) {
-      try {
-        for await (const chunk of completion) {
-          const text = chunk.choices[0]?.delta?.content ?? "";
-          if (text) {
-            controller.enqueue(encoder.encode(text));
-          }
-        }
-      } catch (error) {
-        console.error("Voice generation stream failed", error);
-        controller.error(error);
-        return;
-      }
-
-      controller.close();
-    },
-  });
-
-  return new Response(stream, {
-    headers: {
-      "Content-Type": "text/plain; charset=utf-8",
-      "Cache-Control": "no-store",
-    },
-  });
 }

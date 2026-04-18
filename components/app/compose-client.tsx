@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import {
   getVoiceDimensions,
   getVoiceProfileStrength,
+  type VoiceProfileSampleSignal,
   type VoiceDimensions,
 } from "@/lib/voice-foundations";
 import {
@@ -38,7 +39,7 @@ type VoiceScore = {
 type VoiceProfileSummary = {
   setupSource?: string | null;
   foundationKey?: string | null;
-  samplePosts?: string[];
+  sampleSignal?: Partial<VoiceProfileSampleSignal> | null;
   traits: string[];
   dimensions?: VoiceDimensions | null;
   summary?: string | null;

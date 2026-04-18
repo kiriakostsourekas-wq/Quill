@@ -8,22 +8,28 @@ datasource db {
 }
 
 model User {
-  id               String          @id @default(cuid())
-  email            String          @unique
-  name             String?
-  avatar           String?
-  stripeCustomerId String?
-  plan             String          @default("free")
-  role             String          @default("user")
-  topics           String[]        @default([])
-  onboardingCompleted Boolean      @default(false)
-  marketingConsent Boolean         @default(true)
-  createdAt        DateTime        @default(now())
-  socialAccounts   SocialAccount[]
-  posts            Post[]
-  savedIdeas       SavedIdea[]
-  voiceProfile     VoiceProfile?
-  onboardingResponse OnboardingResponse?
+  id                    String             @id @default(cuid())
+  email                 String             @unique
+  name                  String?
+  avatar                String?
+  stripeCustomerId      String?
+  plan                  String             @default("free")
+  role                  String             @default("user")
+  topics                String[]           @default([])
+  onboardingCompleted   Boolean            @default(false)
+  linkedinActivityLevel String?
+  mainTopic             String?
+  contentGoal           String?
+  communicationStyle    String?
+  contrarianBelief      String?
+  userType              String?
+  marketingConsent      Boolean            @default(true)
+  createdAt             DateTime           @default(now())
+  socialAccounts        SocialAccount[]
+  posts                 Post[]
+  savedIdeas            SavedIdea[]
+  voiceProfile          VoiceProfile?
+  onboardingResponse    OnboardingResponse?
 }
 
 model SocialAccount {
