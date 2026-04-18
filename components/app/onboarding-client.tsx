@@ -43,7 +43,8 @@ type FormState = {
   mainTopic: string;
   contentGoal: ContentGoal | "";
   communicationStyle: CommunicationStyle | "";
-  contrarianBelief: string;
+  commonBelief: string;
+  actualBelief: string;
 };
 
 type CompletionResponse = {
@@ -64,6 +65,17 @@ function getStepIds(activityLevel: LinkedinActivityLevel | "") {
   return steps;
 }
 
+function buildContrarianBelief(form: Pick<FormState, "commonBelief" | "actualBelief">) {
+  const commonBelief = form.commonBelief.trim();
+  const actualBelief = form.actualBelief.trim();
+
+  if (!commonBelief && !actualBelief) return "";
+  if (!commonBelief) return actualBelief;
+  if (!actualBelief) return commonBelief;
+
+  return `Most people think ${commonBelief} is the key to success in [their field], but I believe it's actually ${actualBelief}.`;
+}
+
 export function OnboardingClient() {
   const router = useRouter();
   const [form, setForm] = useState<FormState>({
@@ -71,7 +83,8 @@ export function OnboardingClient() {
     mainTopic: "",
     contentGoal: "",
     communicationStyle: "",
-    contrarianBelief: "",
+    commonBelief: "",
+    actualBelief: "",
   });
   const [stepIndex, setStepIndex] = useState(0);
   const [direction, setDirection] = useState<"forward" | "backward">("forward");
@@ -99,7 +112,7 @@ export function OnboardingClient() {
               : null,
           contrarianBelief:
             nextForm.linkedinActivityLevel === "never"
-              ? nextForm.contrarianBelief.trim()
+              ? buildContrarianBelief(nextForm)
               : null,
         }),
       });
@@ -147,8 +160,8 @@ export function OnboardingClient() {
       linkedinActivityLevel,
       communicationStyle:
         linkedinActivityLevel === "regularly" ? "" : form.communicationStyle,
-      contrarianBelief:
-        linkedinActivityLevel === "never" ? form.contrarianBelief : "",
+      commonBelief: linkedinActivityLevel === "never" ? form.commonBelief : "",
+      actualBelief: linkedinActivityLevel === "never" ? form.actualBelief : "",
     };
 
     setForm(nextForm);
@@ -182,12 +195,26 @@ export function OnboardingClient() {
   function continueFromContrarianBelief() {
     const nextForm = {
       ...form,
-      contrarianBelief: form.contrarianBelief.trim(),
+      commonBelief: form.commonBelief.trim(),
+      actualBelief: form.actualBelief.trim(),
     };
 
     setForm(nextForm);
     advance(nextForm);
   }
+
+  function updateContrarianBeliefField(field: "commonBelief" | "actualBelief", value: string) {
+    setForm((current) => {
+      const nextForm = {
+        ...current,
+        [field]: value,
+      };
+
+      return buildContrarianBelief(nextForm).length <= 300 ? nextForm : current;
+    });
+  }
+
+  const contrarianBeliefLength = buildContrarianBelief(form).length;
 
   function renderOptionList<T extends string>(
     options: readonly { value: T; label: string }[],
@@ -328,24 +355,40 @@ export function OnboardingClient() {
                     Complete this sentence:
                   </h1>
                   <div className="space-y-4">
-                    <p className="text-base leading-7 text-muted">
-                      Most people think ___ is the key to success in [their field], but I believe
-                      it&apos;s actually ___.
-                    </p>
-                    <textarea
-                      autoFocus
-                      maxLength={300}
-                      value={form.contrarianBelief}
-                      onChange={(event) =>
-                        setForm((current) => ({
-                          ...current,
-                          contrarianBelief: event.target.value,
-                        }))
-                      }
-                      className="quill-textarea min-h-[200px] rounded-2xl px-4 text-base"
-                      placeholder="e.g. Most people think consistency is the key, but I believe it's actually having a clear point of view."
-                      aria-label="Complete this sentence"
-                    />
+                    <div className="rounded-2xl border border-line bg-white p-5">
+                      <div className="flex flex-wrap items-center gap-3 text-base leading-7 text-muted">
+                        <span>Most people think</span>
+                        <input
+                          autoFocus
+                          value={form.commonBelief}
+                          onChange={(event) =>
+                            updateContrarianBeliefField("commonBelief", event.target.value)
+                          }
+                          className="quill-input h-12 min-w-[220px] flex-1 rounded-xl px-4 text-base text-ink"
+                          placeholder="consistency"
+                          aria-label="Most people think"
+                        />
+                        <span>is the key to success in [their field],</span>
+                      </div>
+
+                      <div className="mt-4 flex flex-wrap items-center gap-3 text-base leading-7 text-muted">
+                        <span>but I believe it&apos;s actually</span>
+                        <input
+                          value={form.actualBelief}
+                          onChange={(event) =>
+                            updateContrarianBeliefField("actualBelief", event.target.value)
+                          }
+                          className="quill-input h-12 min-w-[260px] flex-1 rounded-xl px-4 text-base text-ink"
+                          placeholder="having a clear point of view"
+                          aria-label="But I believe it's actually"
+                        />
+                        <span>.</span>
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between text-sm text-muted">
+                      <span>Optional</span>
+                      <span>{contrarianBeliefLength}/300</span>
+                    </div>
                     <div className="flex flex-col gap-3 sm:flex-row">
                       <Button
                         variant="outline"

@@ -563,7 +563,14 @@ export function VoiceDnaClient({
   const canSwitchMethod = !trainingRoute.showMethodPicker && !showMethodPicker;
 
   function openTrainingView() {
-    setSetupPath(trainingRoute.defaultSetupPath);
+    const retrainingPath =
+      profile?.setupSource === "foundation"
+        ? trainingRoute.defaultSetupPath === "foundation"
+          ? "pasted_samples"
+          : trainingRoute.defaultSetupPath
+        : profile?.setupSource ?? trainingRoute.defaultSetupPath;
+
+    setSetupPath(retrainingPath);
     setShowMethodPicker(trainingRoute.showMethodPicker);
     setImportOpen(false);
     setViewMode("train");
