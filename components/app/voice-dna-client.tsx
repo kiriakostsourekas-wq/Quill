@@ -32,8 +32,22 @@ type VoiceProfile = {
   summary?: string | null;
 };
 
+type VoiceProfileBootstrap = Omit<VoiceProfile, "setupSource"> & {
+  setupSource: string;
+};
+
+type VoiceDnaClientProps = {
+  initialProfile?: VoiceProfileBootstrap | null;
+  initialUserType?: string | null;
+  initialLinkedinActivityLevel?: string | null;
+};
+
 type LinkedInCsvRow = Record<string, string | undefined>;
 type VoiceDnaViewMode = "profile" | "train";
+type VoiceTrainingRoute = {
+  defaultSetupPath: VoiceSetupSource;
+  showMethodPicker: boolean;
+};
 
 const MIN_SAMPLE_CARDS = 3;
 const MAX_SAMPLE_CARDS = 5;
@@ -65,6 +79,75 @@ const setupPaths: {
     description: "Start with a credible baseline Quill can adapt over time.",
   },
 ];
+
+function getVoiceTrainingRoute(
+  linkedinActivityLevel?: string | null,
+  userType?: string | null
+): VoiceTrainingRoute {
+  if (linkedinActivityLevel === "regularly") {
+    return {
+      defaultSetupPath: "linkedin_posts",
+      showMethodPicker: false,
+    };
+  }
+
+  if (linkedinActivityLevel === "occasionally") {
+    return {
+      defaultSetupPath: "pasted_samples",
+      showMethodPicker: false,
+    };
+  }
+
+  if (linkedinActivityLevel === "never") {
+    return {
+      defaultSetupPath: "foundation",
+      showMethodPicker: false,
+    };
+  }
+
+  if (userType === "creator") {
+    return {
+      defaultSetupPath: "pasted_samples",
+      showMethodPicker: false,
+    };
+  }
+
+  if (userType === "beginner") {
+    return {
+      defaultSetupPath: "foundation",
+      showMethodPicker: false,
+    };
+  }
+
+  if (userType === "builder") {
+    return {
+      defaultSetupPath: "linkedin_posts",
+      showMethodPicker: true,
+    };
+  }
+
+  return {
+    defaultSetupPath: "linkedin_posts",
+    showMethodPicker: true,
+  };
+}
+
+function normalizeVoiceSetupSource(setupSource?: string | null): VoiceSetupSource {
+  if (setupSource === "pasted_samples" || setupSource === "foundation") {
+    return setupSource;
+  }
+
+  return "linkedin_posts";
+}
+
+function normalizeInitialProfile(profile?: VoiceProfileBootstrap | null): VoiceProfile | null {
+  if (!profile) return null;
+
+  return {
+    ...profile,
+    setupSource: normalizeVoiceSetupSource(profile.setupSource),
+  };
+}
 
 function makeEmptyPosts(count = MIN_SAMPLE_CARDS) {
   return Array.from({ length: count }, () => "");
@@ -294,37 +377,35 @@ function VoiceProfileView({
   );
 }
 
-export function VoiceDnaClient() {
-  const [viewMode, setViewMode] = useState<VoiceDnaViewMode>("train");
-  const [setupPath, setSetupPath] = useState<VoiceSetupSource>("linkedin_posts");
+export function VoiceDnaClient({
+  initialProfile = null,
+  initialUserType = null,
+  initialLinkedinActivityLevel = null,
+}: VoiceDnaClientProps) {
+  const normalizedInitialProfile = normalizeInitialProfile(initialProfile);
+  const trainingRoute = useMemo(
+    () => getVoiceTrainingRoute(initialLinkedinActivityLevel, initialUserType),
+    [initialLinkedinActivityLevel, initialUserType]
+  );
+  const [viewMode, setViewMode] = useState<VoiceDnaViewMode>(
+    normalizedInitialProfile ? "profile" : "train"
+  );
+  const [setupPath, setSetupPath] = useState<VoiceSetupSource>(
+    normalizedInitialProfile?.setupSource ?? trainingRoute.defaultSetupPath
+  );
   const [linkedinPosts, setLinkedinPosts] = useState<string[]>(makeEmptyPosts());
   const [writingSamples, setWritingSamples] = useState<string[]>(makeEmptyPosts());
-  const [profile, setProfile] = useState<VoiceProfile | null>(null);
+  const [profile, setProfile] = useState<VoiceProfile | null>(normalizedInitialProfile);
   const [loading, setLoading] = useState(false);
   const [loadingLabel, setLoadingLabel] = useState("Analyzing your writing style...");
   const [progressIndex, setProgressIndex] = useState(0);
+  const [showMethodPicker, setShowMethodPicker] = useState(trainingRoute.showMethodPicker);
   const [importOpen, setImportOpen] = useState(false);
   const [selectedFoundation, setSelectedFoundation] =
-    useState<VoiceFoundationKey>("clear_professional");
-
-  useEffect(() => {
-    fetch("/api/me")
-      .then((response) => response.json())
-      .then((data) => {
-        if (data.user?.voiceProfile) {
-          setProfile(data.user.voiceProfile);
-          setViewMode("profile");
-          setSetupPath(data.user.voiceProfile.setupSource ?? "linkedin_posts");
-          if (data.user.voiceProfile.foundationKey) {
-            setSelectedFoundation(data.user.voiceProfile.foundationKey);
-          }
-          return;
-        }
-
-        setViewMode("train");
-      })
-      .catch(() => undefined);
-  }, []);
+    useState<VoiceFoundationKey>(
+      (normalizedInitialProfile?.foundationKey as VoiceFoundationKey | null) ??
+        "clear_professional"
+    );
 
   useEffect(() => {
     if (!loading || setupPath === "foundation") return;
@@ -479,6 +560,14 @@ export function VoiceDnaClient() {
   const profileStrength = profile ? getVoiceProfileStrength(profile) : null;
   const profileDimensions = profile ? getVoiceDimensions(profile) : null;
   const showTraining = !profile || viewMode === "train";
+  const canSwitchMethod = !trainingRoute.showMethodPicker && !showMethodPicker;
+
+  function openTrainingView() {
+    setSetupPath(trainingRoute.defaultSetupPath);
+    setShowMethodPicker(trainingRoute.showMethodPicker);
+    setImportOpen(false);
+    setViewMode("train");
+  }
 
   return (
     <section className="space-y-6">
@@ -488,10 +577,7 @@ export function VoiceDnaClient() {
           profileStrength={profileStrength}
           profileDimensions={profileDimensions}
           currentFoundationData={currentFoundationData}
-          onTrainMore={() => {
-            setSetupPath(profile.setupSource === "foundation" ? "pasted_samples" : profile.setupSource);
-            setViewMode("train");
-          }}
+          onTrainMore={openTrainingView}
         />
       ) : (
         <>
@@ -514,24 +600,26 @@ export function VoiceDnaClient() {
             )}
           </div>
 
-          <div className="grid gap-3 md:grid-cols-3">
-            {setupPaths.map((path) => (
-              <button
-                key={path.value}
-                type="button"
-                onClick={() => setSetupPath(path.value)}
-                className={cn(
-                  "rounded-2xl border px-5 py-4 text-left transition",
-                  setupPath === path.value
-                    ? "border-brand bg-brand-light"
-                    : "border-line bg-white hover:border-brand/20"
-                )}
-              >
-                <p className="text-sm font-semibold text-ink">{path.label}</p>
-                <p className="mt-2 text-sm leading-6 text-muted">{path.description}</p>
-              </button>
-            ))}
-          </div>
+          {showMethodPicker && (
+            <div className="grid gap-3 md:grid-cols-3">
+              {setupPaths.map((path) => (
+                <button
+                  key={path.value}
+                  type="button"
+                  onClick={() => setSetupPath(path.value)}
+                  className={cn(
+                    "rounded-2xl border px-5 py-4 text-left transition",
+                    setupPath === path.value
+                      ? "border-brand bg-brand-light"
+                      : "border-line bg-white hover:border-brand/20"
+                  )}
+                >
+                  <p className="text-sm font-semibold text-ink">{path.label}</p>
+                  <p className="mt-2 text-sm leading-6 text-muted">{path.description}</p>
+                </button>
+              ))}
+            </div>
+          )}
 
           {setupPath === "linkedin_posts" && (
             <SampleEditor
@@ -574,25 +662,27 @@ export function VoiceDnaClient() {
                 </div>
               }
               footerPrompt={
-                <div className="mt-5 rounded-xl border border-dashed border-brand/20 bg-brand-light/30 px-4 py-4 text-sm leading-6 text-muted">
-                  Not enough strong LinkedIn posts yet? Switch to{" "}
-                  <button
-                    type="button"
-                    onClick={() => setSetupPath("pasted_samples")}
-                    className="font-medium text-brand hover:underline"
-                  >
-                    pasted writing samples
-                  </button>{" "}
-                  or start from a{" "}
-                  <button
-                    type="button"
-                    onClick={() => setSetupPath("foundation")}
-                    className="font-medium text-brand hover:underline"
-                  >
-                    voice foundation
-                  </button>
-                  .
-                </div>
+                showMethodPicker ? (
+                  <div className="mt-5 rounded-xl border border-dashed border-brand/20 bg-brand-light/30 px-4 py-4 text-sm leading-6 text-muted">
+                    Not enough strong LinkedIn posts yet? Switch to{" "}
+                    <button
+                      type="button"
+                      onClick={() => setSetupPath("pasted_samples")}
+                      className="font-medium text-brand hover:underline"
+                    >
+                      pasted writing samples
+                    </button>{" "}
+                    or start from a{" "}
+                    <button
+                      type="button"
+                      onClick={() => setSetupPath("foundation")}
+                      className="font-medium text-brand hover:underline"
+                    >
+                      voice foundation
+                    </button>
+                    .
+                  </div>
+                ) : undefined
               }
             />
           )}
@@ -667,6 +757,18 @@ export function VoiceDnaClient() {
                   </p>
                 </div>
               )}
+            </div>
+          )}
+
+          {canSwitchMethod && (
+            <div className="text-center">
+              <button
+                type="button"
+                onClick={() => setShowMethodPicker(true)}
+                className="text-xs font-medium text-muted transition hover:text-ink"
+              >
+                Switch method
+              </button>
             </div>
           )}
 
