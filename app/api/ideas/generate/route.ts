@@ -4,7 +4,7 @@ import { requireRequestUser } from "@/lib/auth";
 import { groq } from "@/lib/groq";
 import { getVoiceProfilePromptContext } from "@/lib/voice-foundations";
 import { prisma } from "@/lib/prisma";
-import { parseJsonArray, readRequestJson } from "@/lib/utils";
+import { parseJsonArray, parseJsonObject, readRequestJson } from "@/lib/utils";
 
 const generateIdeasSchema = z.object({
   topics: z.array(z.string().trim().min(1)).max(8).optional().default([]),
@@ -15,6 +15,10 @@ type IdeaResult = {
   expansion: string;
   type: "Opinion" | "Story" | "Tip" | "Data" | "Question";
   soundsLikeUser: boolean;
+};
+
+type IdeasEnvelope = {
+  ideas?: IdeaResult[];
 };
 
 function getMessageText(
@@ -71,14 +75,13 @@ export async function POST(request: NextRequest) {
   const completion = await groq.chat.completions.create({
     model: "llama-3.3-70b-versatile",
     temperature: 0.75,
+    response_format: { type: "json_object" },
     messages: [
       {
         role: "system",
-        content: `You are a LinkedIn content strategist who specializes in personal brand content. Generate exactly 5 LinkedIn post ideas for someone with this voice profile: ${JSON.stringify(
-          getVoiceProfilePromptContext(voiceProfile, { includeSamplePosts: false })
-        )}.
+        content: `You are a LinkedIn content strategist who specializes in personal brand content.
 
-Their topics of interest: ${topics.join(", ")}.
+Generate exactly 5 LinkedIn post ideas for the provided voice profile and topics.
 
 For each idea return:
 - hook: a single bold opening line (max 12 words) that stops the scroll. Match the profile's patterns, rhythm, and tone without reusing wording from any training sample.
@@ -90,7 +93,25 @@ Do not reuse exact phrases from training samples.
 Do not closely paraphrase sample sentences.
 Do not copy hooks or sentence shapes too literally.
 
-Return ONLY a valid JSON array of 5 objects with these exact fields. No other text.`,
+Return ONLY a valid JSON object in this shape:
+{
+  "ideas": [
+    {
+      "hook": "string",
+      "expansion": "string",
+      "type": "Opinion" | "Story" | "Tip" | "Data" | "Question",
+      "soundsLikeUser": true
+    }
+  ]
+}`,
+      },
+      {
+        role: "user",
+        content: `Voice profile: ${JSON.stringify(
+          getVoiceProfilePromptContext(voiceProfile, { includeSamplePosts: false })
+        )}
+
+Topics of interest: ${topics.join(", ")}`,
       },
     ],
   });
@@ -99,7 +120,20 @@ Return ONLY a valid JSON array of 5 objects with these exact fields. No other te
 
   let ideas: IdeaResult[] = [];
   try {
-    ideas = parseJsonArray<IdeaResult[]>(content)
+    const parsedIdeas = (() => {
+      try {
+        const parsed = parseJsonObject<IdeasEnvelope>(content).ideas;
+        if (Array.isArray(parsed)) {
+          return parsed;
+        }
+      } catch {
+        // Fall back to the legacy raw-array shape below.
+      }
+
+      return parseJsonArray<IdeaResult[]>(content);
+    })();
+
+    ideas = parsedIdeas
       .map((idea) => ({
         hook: idea.hook?.trim() ?? "",
         expansion: idea.expansion?.trim() ?? "",
