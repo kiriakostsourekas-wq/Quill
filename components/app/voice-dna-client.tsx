@@ -2,8 +2,9 @@
 
 import Papa from "papaparse";
 import { type ReactNode, useEffect, useMemo, useState } from "react";
-import { CheckCircle2, Loader2 } from "lucide-react";
+import { BarChart3, CheckCircle2, Loader2, Sparkles } from "lucide-react";
 import { toast } from "sonner";
+import { AnalyticsClient } from "@/components/app/analytics-client";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import {
@@ -43,6 +44,7 @@ type VoiceDnaClientProps = {
 };
 
 type LinkedInCsvRow = Record<string, string | undefined>;
+type VoiceDnaPageTab = "voice" | "analytics";
 type VoiceDnaViewMode = "profile" | "train";
 type VoiceTrainingRoute = {
   defaultSetupPath: VoiceSetupSource;
@@ -401,6 +403,7 @@ export function VoiceDnaClient({
   const [progressIndex, setProgressIndex] = useState(0);
   const [showMethodPicker, setShowMethodPicker] = useState(trainingRoute.showMethodPicker);
   const [importOpen, setImportOpen] = useState(false);
+  const [pageTab, setPageTab] = useState<VoiceDnaPageTab>("voice");
   const [selectedFoundation, setSelectedFoundation] =
     useState<VoiceFoundationKey>(
       (normalizedInitialProfile?.foundationKey as VoiceFoundationKey | null) ??
@@ -577,242 +580,275 @@ export function VoiceDnaClient({
   }
 
   return (
-    <section className="space-y-6">
-      {!showTraining && profile ? (
-        <VoiceProfileView
-          profile={profile}
-          profileStrength={profileStrength}
-          profileDimensions={profileDimensions}
-          currentFoundationData={currentFoundationData}
-          onTrainMore={openTrainingView}
-        />
-      ) : (
-        <>
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div>
-              <h1 className="text-2xl font-semibold text-ink">
-                {profile ? "Add more signal to Voice DNA" : "Train your Voice DNA"}
-              </h1>
-              <p className="mt-1 max-w-3xl text-sm leading-6 text-muted">
-                Quill works best when it understands how you naturally write. Use your past
-                LinkedIn posts if you have them, paste writing you already trust, or start from a
-                clean foundation if you are still defining your voice. Once this is set, Compose
-                can generate from ideas, rewrite rough notes, and improve drafts in your voice.
-              </p>
-            </div>
-            {profile && (
-              <Button variant="outline" onClick={() => setViewMode("profile")}>
-                Back to current profile
-              </Button>
+    <div className="space-y-6">
+      <div className="flex justify-start sm:justify-end">
+        <div className="inline-flex rounded-full border border-line bg-white p-1">
+          <button
+            type="button"
+            onClick={() => setPageTab("voice")}
+            className={cn(
+              "inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition",
+              pageTab === "voice" ? "bg-brand text-white" : "text-muted"
             )}
-          </div>
+          >
+            <Sparkles className="h-4 w-4" />
+            Voice DNA
+          </button>
+          <button
+            type="button"
+            onClick={() => setPageTab("analytics")}
+            className={cn(
+              "inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition",
+              pageTab === "analytics" ? "bg-brand text-white" : "text-muted"
+            )}
+          >
+            <BarChart3 className="h-4 w-4" />
+            Analytics
+          </button>
+        </div>
+      </div>
 
-          {showMethodPicker && (
-            <div className="grid gap-3 md:grid-cols-3">
-              {setupPaths.map((path) => (
-                <button
-                  key={path.value}
-                  type="button"
-                  onClick={() => setSetupPath(path.value)}
-                  className={cn(
-                    "rounded-2xl border px-5 py-4 text-left transition",
-                    setupPath === path.value
-                      ? "border-brand bg-brand-light"
-                      : "border-line bg-white hover:border-brand/20"
-                  )}
-                >
-                  <p className="text-sm font-semibold text-ink">{path.label}</p>
-                  <p className="mt-2 text-sm leading-6 text-muted">{path.description}</p>
-                </button>
-              ))}
-            </div>
-          )}
-
-          {setupPath === "linkedin_posts" && (
-            <SampleEditor
-              title="Use your past LinkedIn posts"
-              description="Add 3–5 posts that already sound like you. If you do not have enough strong LinkedIn content yet, Quill can also learn from other writing you created yourself."
-              posts={linkedinPosts}
-              placeholder="Paste a LinkedIn post you're proud of here..."
-              onChange={(index, value) => updateSamples("linkedin_posts", index, value)}
-              onAdd={() => addSampleCard("linkedin_posts")}
-              onRemove={(index) => removeSampleCard("linkedin_posts", index)}
-              importSection={
-                <div className="mt-5 rounded-xl border border-line p-4">
-                  <button
-                    type="button"
-                    onClick={() => setImportOpen((current) => !current)}
-                    className="text-sm font-medium text-brand hover:underline"
-                  >
-                    Have a LinkedIn data export? Import posts automatically →
-                  </button>
-
-                  {importOpen && (
-                    <div className="mt-4 space-y-3">
-                      <p className="text-sm leading-6 text-muted">
-                        Download your LinkedIn data export from LinkedIn Settings → Data Privacy →
-                        Get a copy of your data → Posts. Then upload the Posts.csv file here.
-                      </p>
-                      <input
-                        type="file"
-                        accept=".csv,text/csv"
-                        onChange={(event) => {
-                          const file = event.target.files?.[0];
-                          if (!file) return;
-                          void importFromCsv(file);
-                          event.currentTarget.value = "";
-                        }}
-                        className="block w-full text-sm text-muted file:mr-4 file:rounded-md file:border-0 file:bg-brand-light file:px-4 file:py-2 file:text-sm file:font-medium file:text-brand hover:file:bg-brand-light/80"
-                      />
-                    </div>
-                  )}
-                </div>
-              }
-              footerPrompt={
-                showMethodPicker ? (
-                  <div className="mt-5 rounded-xl border border-dashed border-brand/20 bg-brand-light/30 px-4 py-4 text-sm leading-6 text-muted">
-                    Not enough strong LinkedIn posts yet? Switch to{" "}
-                    <button
-                      type="button"
-                      onClick={() => setSetupPath("pasted_samples")}
-                      className="font-medium text-brand hover:underline"
-                    >
-                      pasted writing samples
-                    </button>{" "}
-                    or start from a{" "}
-                    <button
-                      type="button"
-                      onClick={() => setSetupPath("foundation")}
-                      className="font-medium text-brand hover:underline"
-                    >
-                      voice foundation
-                    </button>
-                    .
-                  </div>
-                ) : undefined
-              }
+      {pageTab === "analytics" ? (
+        <AnalyticsClient embedded />
+      ) : (
+        <section className="space-y-6">
+          {!showTraining && profile ? (
+            <VoiceProfileView
+              profile={profile}
+              profileStrength={profileStrength}
+              profileDimensions={profileDimensions}
+              currentFoundationData={currentFoundationData}
+              onTrainMore={openTrainingView}
             />
-          )}
-
-          {setupPath === "pasted_samples" && (
-            <SampleEditor
-              title="Paste writing samples"
-              description="Paste 3–5 short samples of anything you personally wrote: old posts, notes, tweets, essays, newsletters, journal fragments, or unfinished drafts. Quill only needs authentic writing, not polished LinkedIn content."
-              posts={writingSamples}
-              placeholder="Paste something you personally wrote here..."
-              onChange={(index, value) => updateSamples("pasted_samples", index, value)}
-              onAdd={() => addSampleCard("pasted_samples")}
-              onRemove={(index) => removeSampleCard("pasted_samples", index)}
-            />
-          )}
-
-          {setupPath === "foundation" && (
-            <div className="quill-card p-6">
-              <div>
-                <h2 className="text-lg font-semibold text-ink">Start from a voice foundation</h2>
-                <p className="mt-2 max-w-3xl text-sm leading-6 text-muted">
-                  This is a starting point for people who do not have enough past content yet. Pick
-                  the closest foundation now, then let Quill adapt it over time as you write more.
-                </p>
-              </div>
-
-              <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                {voiceFoundations.map((foundation) => (
-                  <button
-                    key={foundation.key}
-                    type="button"
-                    onClick={() => setSelectedFoundation(foundation.key)}
-                    className={cn(
-                      "rounded-2xl border p-4 text-left transition",
-                      selectedFoundation === foundation.key
-                        ? "border-brand bg-brand-light"
-                        : "border-line bg-white hover:border-brand/20"
-                    )}
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <p className="text-sm font-semibold text-ink">{foundation.label}</p>
-                        <p className="mt-2 text-sm leading-6 text-muted">
-                          {foundation.description}
-                        </p>
-                      </div>
-                      {selectedFoundation === foundation.key && (
-                        <CheckCircle2 className="h-5 w-5 shrink-0 text-brand" />
-                      )}
-                    </div>
-                    <div className="mt-4 flex flex-wrap gap-2">
-                      {foundation.traits.map((trait) => (
-                        <span
-                          key={`${foundation.key}-${trait}`}
-                          className="rounded-full bg-white px-3 py-1 text-xs font-medium text-brand"
-                        >
-                          {trait}
-                        </span>
-                      ))}
-                    </div>
-                  </button>
-                ))}
-              </div>
-
-              {selectedFoundationData && (
-                <div className="mt-5 rounded-xl border border-line bg-slate-50 p-4 text-sm leading-6 text-muted">
-                  <p className="font-medium text-ink">What this foundation does</p>
-                  <p className="mt-2">{selectedFoundationData.summary}</p>
-                  <p className="mt-2">
-                    This is a temporary starting foundation, not a final identity. Quill can adapt
-                    it as it learns from your real writing.
+          ) : (
+            <>
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div>
+                  <h1 className="text-2xl font-semibold text-ink">
+                    {profile ? "Add more signal to Voice DNA" : "Train your Voice DNA"}
+                  </h1>
+                  <p className="mt-1 max-w-3xl text-sm leading-6 text-muted">
+                    Quill works best when it understands how you naturally write. Use your past
+                    LinkedIn posts if you have them, paste writing you already trust, or start from a
+                    clean foundation if you are still defining your voice. Once this is set, Compose
+                    can generate from ideas, rewrite rough notes, and improve drafts in your voice.
                   </p>
+                </div>
+                {profile && (
+                  <Button variant="outline" onClick={() => setViewMode("profile")}>
+                    Back to current profile
+                  </Button>
+                )}
+              </div>
+
+              {showMethodPicker && (
+                <div className="grid gap-3 md:grid-cols-3">
+                  {setupPaths.map((path) => (
+                    <button
+                      key={path.value}
+                      type="button"
+                      onClick={() => setSetupPath(path.value)}
+                      className={cn(
+                        "rounded-2xl border px-5 py-4 text-left transition",
+                        setupPath === path.value
+                          ? "border-brand bg-brand-light"
+                          : "border-line bg-white hover:border-brand/20"
+                      )}
+                    >
+                      <p className="text-sm font-semibold text-ink">{path.label}</p>
+                      <p className="mt-2 text-sm leading-6 text-muted">{path.description}</p>
+                    </button>
+                  ))}
                 </div>
               )}
-            </div>
-          )}
 
-          {canSwitchMethod && (
-            <div className="text-center">
-              <button
-                type="button"
-                onClick={() => setShowMethodPicker(true)}
-                className="text-xs font-medium text-muted transition hover:text-ink"
-              >
-                Switch method
-              </button>
-            </div>
-          )}
+              {setupPath === "linkedin_posts" && (
+                <SampleEditor
+                  title="Use your past LinkedIn posts"
+                  description="Add 3–5 posts that already sound like you. If you do not have enough strong LinkedIn content yet, Quill can also learn from other writing you created yourself."
+                  posts={linkedinPosts}
+                  placeholder="Paste a LinkedIn post you're proud of here..."
+                  onChange={(index, value) => updateSamples("linkedin_posts", index, value)}
+                  onAdd={() => addSampleCard("linkedin_posts")}
+                  onRemove={(index) => removeSampleCard("linkedin_posts", index)}
+                  importSection={
+                    <div className="mt-5 rounded-xl border border-line p-4">
+                      <button
+                        type="button"
+                        onClick={() => setImportOpen((current) => !current)}
+                        className="text-sm font-medium text-brand hover:underline"
+                      >
+                        Have a LinkedIn data export? Import posts automatically →
+                      </button>
 
-          <div>
-            {loading ? (
-              <div className="rounded-xl border border-line bg-white px-4 py-4">
-                <div className="flex items-center gap-3 text-sm font-medium text-ink">
-                  <Loader2 className="h-4 w-4 animate-spin text-brand" />
-                  <span>{loadingLabel}</span>
+                      {importOpen && (
+                        <div className="mt-4 space-y-3">
+                          <p className="text-sm leading-6 text-muted">
+                            Download your LinkedIn data export from LinkedIn Settings → Data Privacy →
+                            Get a copy of your data → Posts. Then upload the Posts.csv file here.
+                          </p>
+                          <input
+                            type="file"
+                            accept=".csv,text/csv"
+                            onChange={(event) => {
+                              const file = event.target.files?.[0];
+                              if (!file) return;
+                              void importFromCsv(file);
+                              event.currentTarget.value = "";
+                            }}
+                            className="block w-full text-sm text-muted file:mr-4 file:rounded-md file:border-0 file:bg-brand-light file:px-4 file:py-2 file:text-sm file:font-medium file:text-brand hover:file:bg-brand-light/80"
+                          />
+                        </div>
+                      )}
+                    </div>
+                  }
+                  footerPrompt={
+                    showMethodPicker ? (
+                      <div className="mt-5 rounded-xl border border-dashed border-brand/20 bg-brand-light/30 px-4 py-4 text-sm leading-6 text-muted">
+                        Not enough strong LinkedIn posts yet? Switch to{" "}
+                        <button
+                          type="button"
+                          onClick={() => setSetupPath("pasted_samples")}
+                          className="font-medium text-brand hover:underline"
+                        >
+                          pasted writing samples
+                        </button>{" "}
+                        or start from a{" "}
+                        <button
+                          type="button"
+                          onClick={() => setSetupPath("foundation")}
+                          className="font-medium text-brand hover:underline"
+                        >
+                          voice foundation
+                        </button>
+                        .
+                      </div>
+                    ) : undefined
+                  }
+                />
+              )}
+
+              {setupPath === "pasted_samples" && (
+                <SampleEditor
+                  title="Paste writing samples"
+                  description="Paste 3–5 short samples of anything you personally wrote: old posts, notes, tweets, essays, newsletters, journal fragments, or unfinished drafts. Quill only needs authentic writing, not polished LinkedIn content."
+                  posts={writingSamples}
+                  placeholder="Paste something you personally wrote here..."
+                  onChange={(index, value) => updateSamples("pasted_samples", index, value)}
+                  onAdd={() => addSampleCard("pasted_samples")}
+                  onRemove={(index) => removeSampleCard("pasted_samples", index)}
+                />
+              )}
+
+              {setupPath === "foundation" && (
+                <div className="quill-card p-6">
+                  <div>
+                    <h2 className="text-lg font-semibold text-ink">Start from a voice foundation</h2>
+                    <p className="mt-2 max-w-3xl text-sm leading-6 text-muted">
+                      This is a starting point for people who do not have enough past content yet. Pick
+                      the closest foundation now, then let Quill adapt it over time as you write more.
+                    </p>
+                  </div>
+
+                  <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                    {voiceFoundations.map((foundation) => (
+                      <button
+                        key={foundation.key}
+                        type="button"
+                        onClick={() => setSelectedFoundation(foundation.key)}
+                        className={cn(
+                          "rounded-2xl border p-4 text-left transition",
+                          selectedFoundation === foundation.key
+                            ? "border-brand bg-brand-light"
+                            : "border-line bg-white hover:border-brand/20"
+                        )}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <p className="text-sm font-semibold text-ink">{foundation.label}</p>
+                            <p className="mt-2 text-sm leading-6 text-muted">
+                              {foundation.description}
+                            </p>
+                          </div>
+                          {selectedFoundation === foundation.key && (
+                            <CheckCircle2 className="h-5 w-5 shrink-0 text-brand" />
+                          )}
+                        </div>
+                        <div className="mt-4 flex flex-wrap gap-2">
+                          {foundation.traits.map((trait) => (
+                            <span
+                              key={`${foundation.key}-${trait}`}
+                              className="rounded-full bg-white px-3 py-1 text-xs font-medium text-brand"
+                            >
+                              {trait}
+                            </span>
+                          ))}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+
+                  {selectedFoundationData && (
+                    <div className="mt-5 rounded-xl border border-line bg-slate-50 p-4 text-sm leading-6 text-muted">
+                      <p className="font-medium text-ink">What this foundation does</p>
+                      <p className="mt-2">{selectedFoundationData.summary}</p>
+                      <p className="mt-2">
+                        This is a temporary starting foundation, not a final identity. Quill can adapt
+                        it as it learns from your real writing.
+                      </p>
+                    </div>
+                  )}
                 </div>
-                {setupPath !== "foundation" && (
-                  <p className="mt-2 text-sm text-muted">{progressMessages[progressIndex]}</p>
+              )}
+
+              {canSwitchMethod && (
+                <div className="text-center">
+                  <button
+                    type="button"
+                    onClick={() => setShowMethodPicker(true)}
+                    className="text-xs font-medium text-muted transition hover:text-ink"
+                  >
+                    Switch method
+                  </button>
+                </div>
+              )}
+
+              <div>
+                {loading ? (
+                  <div className="rounded-xl border border-line bg-white px-4 py-4">
+                    <div className="flex items-center gap-3 text-sm font-medium text-ink">
+                      <Loader2 className="h-4 w-4 animate-spin text-brand" />
+                      <span>{loadingLabel}</span>
+                    </div>
+                    {setupPath !== "foundation" && (
+                      <p className="mt-2 text-sm text-muted">{progressMessages[progressIndex]}</p>
+                    )}
+                  </div>
+                ) : setupPath === "foundation" ? (
+                  <Button onClick={createFoundationProfile}>Start from this foundation →</Button>
+                ) : (
+                  <>
+                    <Button
+                      className={cn(!canAnalyzeSamples && "cursor-not-allowed opacity-60")}
+                      onClick={() =>
+                        void analyzeFromSamples(setupPath as "linkedin_posts" | "pasted_samples")
+                      }
+                      disabled={!canAnalyzeSamples}
+                    >
+                      Analyze my voice →
+                    </Button>
+                    {!canAnalyzeSamples && (
+                      <p className="mt-3 text-sm text-muted">
+                        Add at least 2 substantial samples to analyze your voice. 3–5 is better.
+                      </p>
+                    )}
+                  </>
                 )}
               </div>
-            ) : setupPath === "foundation" ? (
-              <Button onClick={createFoundationProfile}>Start from this foundation →</Button>
-            ) : (
-              <>
-                <Button
-                  className={cn(!canAnalyzeSamples && "cursor-not-allowed opacity-60")}
-                  onClick={() =>
-                    void analyzeFromSamples(setupPath as "linkedin_posts" | "pasted_samples")
-                  }
-                  disabled={!canAnalyzeSamples}
-                >
-                  Analyze my voice →
-                </Button>
-                {!canAnalyzeSamples && (
-                  <p className="mt-3 text-sm text-muted">
-                    Add at least 2 substantial samples to analyze your voice. 3–5 is better.
-                  </p>
-                )}
-              </>
-            )}
-          </div>
-        </>
+            </>
+          )}
+        </section>
       )}
-    </section>
+    </div>
   );
 }

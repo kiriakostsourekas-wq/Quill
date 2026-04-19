@@ -56,7 +56,7 @@ async function fetchPosts() {
   return data.posts ?? [];
 }
 
-export function ScheduledClient() {
+export function ScheduledClient({ embedded = false }: { embedded?: boolean }) {
   const [posts, setPosts] = useState<PostRecord[]>([]);
   const [activeFilter, setActiveFilter] = useState<(typeof filters)[number]>("all");
 
@@ -119,13 +119,15 @@ export function ScheduledClient() {
 
   return (
     <section className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold text-ink">Scheduled</h1>
-        <p className="mt-1 text-sm text-muted">
-          Manage text-post scheduling, drafts, published posts, and failed posts. LinkedIn
-          carousels stay draft-or-publish-now only.
-        </p>
-      </div>
+      {!embedded && (
+        <div>
+          <h1 className="text-2xl font-semibold text-ink">Scheduled</h1>
+          <p className="mt-1 text-sm text-muted">
+            Manage text-post scheduling, drafts, published posts, and failed posts. LinkedIn
+            carousels stay draft-or-publish-now only.
+          </p>
+        </div>
+      )}
 
       {!AUTO_SCHEDULING_ENABLED && (
         <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">

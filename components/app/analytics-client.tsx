@@ -45,13 +45,15 @@ type VoiceReportState = {
   lowestScoringPosts: VoicePostPreview[];
 };
 
-function AnalyticsSkeleton() {
+function AnalyticsSkeleton({ embedded = false }: { embedded?: boolean }) {
   return (
     <section className="space-y-6">
-      <div className="space-y-2">
-        <div className="h-8 w-40 animate-pulse rounded bg-slate-200" />
-        <div className="h-4 w-72 animate-pulse rounded bg-slate-200" />
-      </div>
+      {!embedded && (
+        <div className="space-y-2">
+          <div className="h-8 w-40 animate-pulse rounded bg-slate-200" />
+          <div className="h-4 w-72 animate-pulse rounded bg-slate-200" />
+        </div>
+      )}
       <div className="grid gap-4 md:grid-cols-4">
         {Array.from({ length: 4 }).map((_, index) => (
           <div key={index} className="quill-card p-5">
@@ -95,7 +97,7 @@ function PostScoreList({
   );
 }
 
-export function AnalyticsClient() {
+export function AnalyticsClient({ embedded = false }: { embedded?: boolean }) {
   const [analytics, setAnalytics] = useState<AnalyticsState | null>(null);
   const [voiceReport, setVoiceReport] = useState<VoiceReportState | null>(null);
   const [historyWindow, setHistoryWindow] = useState<30 | 90>(30);
@@ -133,17 +135,19 @@ export function AnalyticsClient() {
         : `${trendValue} vs previous week`;
 
   if (loading) {
-    return <AnalyticsSkeleton />;
+    return <AnalyticsSkeleton embedded={embedded} />;
   }
 
   return (
     <section className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold text-ink">Analytics</h1>
-        <p className="mt-1 text-sm text-muted">
-          Track publishing volume and see how consistently your posts sound like you.
-        </p>
-      </div>
+      {!embedded && (
+        <div>
+          <h1 className="text-2xl font-semibold text-ink">Analytics</h1>
+          <p className="mt-1 text-sm text-muted">
+            Track publishing volume and see how consistently your posts sound like you.
+          </p>
+        </div>
+      )}
 
       <div className="grid gap-4 md:grid-cols-4">
         {[

@@ -477,7 +477,10 @@ export function CarouselClient() {
                   <p className="font-medium text-red-700">Unable to load this carousel draft</p>
                   <p className="mt-2 text-sm text-red-600">{loadPostError}</p>
                   <div className="mt-4 flex flex-wrap gap-3">
-                    <Button variant="outline" onClick={() => router.push("/scheduled")}>
+                    <Button
+                      variant="outline"
+                      onClick={() => router.push("/compose?workspace=scheduled")}
+                    >
                       Back to Scheduled
                     </Button>
                     <Button onClick={() => router.replace("/carousel")}>Start fresh</Button>

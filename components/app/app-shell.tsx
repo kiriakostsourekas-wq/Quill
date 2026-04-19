@@ -4,13 +4,8 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  BarChart3,
-  Calendar,
-  CalendarRange,
   Feather,
   Lightbulb,
-  LayoutTemplate,
-  LayoutDashboard,
   LogOut,
   MenuSquare,
   MoonStar,
@@ -25,15 +20,12 @@ import { KeyboardHint } from "@/components/app/keyboard-hint";
 import { useTheme } from "@/components/app/theme-provider";
 import { cn } from "@/lib/utils";
 
+// Dashboard remains available as a direct route because it still contains
+// the publishing summary cards and recent-posts table that are not surfaced elsewhere.
 const navItems = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/compose", label: "Compose", icon: PenSquare },
-  { href: "/carousel", label: "Carousel", icon: LayoutTemplate },
-  { href: "/scheduled", label: "Scheduled", icon: CalendarRange },
-  { href: "/calendar", label: "Calendar", icon: Calendar },
   { href: "/voice-dna", label: "Voice DNA", icon: Sparkles },
   { href: "/ideas", label: "Ideas", icon: Lightbulb },
-  { href: "/analytics", label: "Analytics", icon: BarChart3 },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 
@@ -220,7 +212,7 @@ export function AppShell({ user, children }: AppShellProps) {
     <div className="min-h-screen bg-canvas">
       <div className="flex min-h-screen">
         <aside className="hidden w-64 border-r border-line bg-surface px-4 py-6 lg:block">
-          <Link href="/dashboard" className="flex items-center gap-3 px-3">
+          <Link href="/compose" className="flex items-center gap-3 px-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand text-white">
               <Feather className="h-5 w-5" />
             </div>
