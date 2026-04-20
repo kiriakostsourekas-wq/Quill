@@ -355,36 +355,20 @@ export function OnboardingClient() {
                     Complete this sentence:
                   </h1>
                   <div className="space-y-4">
-                    <div className="rounded-2xl border border-line bg-white p-5">
-                      <div className="flex flex-wrap items-center gap-3 text-base leading-7 text-muted">
-                        <span>Most people think</span>
-                        <input
-                          autoFocus
-                          value={form.commonBelief}
-                          onChange={(event) =>
-                            updateContrarianBeliefField("commonBelief", event.target.value)
-                          }
-                          className="quill-input h-12 min-w-[220px] flex-1 rounded-xl px-4 text-base text-ink"
-                          placeholder="consistency"
-                          aria-label="Most people think"
-                        />
-                        <span>is the key to success in [their field],</span>
-                      </div>
-
-                      <div className="mt-4 flex flex-wrap items-center gap-3 text-base leading-7 text-muted">
-                        <span>but I believe it&apos;s actually</span>
-                        <input
-                          value={form.actualBelief}
-                          onChange={(event) =>
-                            updateContrarianBeliefField("actualBelief", event.target.value)
-                          }
-                          className="quill-input h-12 min-w-[260px] flex-1 rounded-xl px-4 text-base text-ink"
-                          placeholder="having a clear point of view"
-                          aria-label="But I believe it's actually"
-                        />
-                        <span>.</span>
-                      </div>
-                    </div>
+                    <p className="text-base leading-7 text-muted">
+                      Most people think ___ is the key to success in my field, but I believe
+                      it&apos;s actually ___.
+                    </p>
+                    <textarea
+                      autoFocus
+                      value={form.actualBelief}
+                      onChange={(event) =>
+                        updateContrarianBeliefField("actualBelief", event.target.value)
+                      }
+                      className="quill-textarea min-h-[220px]"
+                      placeholder="e.g. Most people think consistency is the key, but I believe it's actually having a clear point of view."
+                      aria-label="Contrarian belief"
+                    />
                     <div className="flex items-center justify-between text-sm text-muted">
                       <span>Optional</span>
                       <span>{contrarianBeliefLength}/300</span>

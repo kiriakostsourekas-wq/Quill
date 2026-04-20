@@ -29,7 +29,6 @@ model User {
   posts                 Post[]
   savedIdeas            SavedIdea[]
   voiceProfile          VoiceProfile?
-  onboardingResponse    OnboardingResponse?
 }
 
 model SocialAccount {
@@ -130,17 +129,6 @@ model VoiceProfile {
   summary        String?
   lastAnalyzedAt DateTime @default(now())
   user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-}
-
-model OnboardingResponse {
-  id               String   @id @default(cuid())
-  userId           String   @unique
-  useCase          String
-  postingFreq      String
-  email            String?
-  marketingConsent Boolean  @default(true)
-  createdAt        DateTime @default(now())
-  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model SavedIdea {
