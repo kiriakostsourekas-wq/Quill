@@ -120,6 +120,7 @@ model VoiceProfile {
   setupSource    String   @default("linkedin_posts")
   foundationKey  String?
   samplePosts    String[]
+  excludedPosts  String[] @default([])
   traits         String[]
   dimensions     Json?
   sentenceLength String?

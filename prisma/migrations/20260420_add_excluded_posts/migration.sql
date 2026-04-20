@@ -1,0 +1,2 @@
+ALTER TABLE IF EXISTS public."VoiceProfile"
+ADD COLUMN IF NOT EXISTS "excludedPosts" TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[];
