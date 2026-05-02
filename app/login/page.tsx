@@ -29,18 +29,31 @@ export default async function LoginPage({
   const errorMessage = searchParams?.error ? errorMessages[searchParams.error] : null;
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-[#F3F4F6] px-6 py-12">
-      <div className="quill-card w-full max-w-md p-8">
+    <main className="flex min-h-screen items-center justify-center overflow-x-hidden bg-[#F4F6F7] px-6 py-28 sm:py-12">
+      <div className="absolute inset-x-0 top-5 px-6">
+        <div className="mx-auto flex h-14 max-w-5xl items-center justify-between rounded-full border border-white/80 bg-[#FFFFFF]/88 px-5 shadow-[0_22px_70px_rgba(15,23,42,0.12)] backdrop-blur-xl">
+          <Link href="/" className="text-sm font-bold tracking-[-0.02em] text-[#15161A]">
+            Quill AI
+          </Link>
+          <Link href="/" className="text-xs font-medium text-slate-600 transition hover:text-brand">
+            Back home
+          </Link>
+        </div>
+      </div>
+
+      <div className="w-full max-w-md rounded-[30px] border border-white bg-[#FFFFFF] p-7 shadow-[0_28px_80px_rgba(15,23,42,0.12)] sm:p-8">
         <div className="flex flex-col items-center text-center">
           <QuillLogo />
-          <h1 className="mt-6 text-2xl font-semibold text-ink">Continue with Quill.</h1>
-          <p className="mt-2 text-sm text-muted">
+          <h1 className="mt-7 text-2xl font-extrabold tracking-[-0.04em] text-[#15161A] sm:text-3xl">
+            Continue with Quill AI.
+          </h1>
+          <p className="mt-3 text-sm leading-6 text-muted">
             Join the free beta with LinkedIn. You can connect X once you’re inside.
           </p>
         </div>
 
         {errorMessage && (
-          <div className="mt-6 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          <div className="mt-6 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
             {errorMessage}
           </div>
         )}
@@ -49,7 +62,7 @@ export default async function LoginPage({
           <form action="/api/auth/linkedin" method="post">
             <button
               type="submit"
-              className="flex h-11 w-full items-center justify-center rounded-md bg-brand px-4 text-sm font-medium text-white transition hover:bg-brand/90"
+              className="flex h-12 w-full items-center justify-center rounded-full bg-brand px-4 text-sm font-semibold text-white shadow-[0_16px_40px_rgba(83,74,183,0.2)] transition hover:-translate-y-0.5 hover:bg-brand/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/30 focus-visible:ring-offset-2"
             >
               Continue with LinkedIn
             </button>
