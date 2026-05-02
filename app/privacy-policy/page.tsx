@@ -25,20 +25,20 @@ const sections = [
 
 export default function PrivacyPolicyPage() {
   return (
-    <main className="min-h-screen bg-canvas px-6 py-12">
+    <main className="min-h-screen bg-[#F4F6F7] px-6 py-8 text-[#15161A] sm:py-10">
       <div className="mx-auto max-w-4xl">
-        <div className="flex items-center justify-between">
+        <div className="flex h-14 items-center justify-between rounded-full border border-white/80 bg-[#FFFFFF]/88 px-5 shadow-[0_22px_70px_rgba(15,23,42,0.12)] backdrop-blur-xl">
           <QuillLogo />
-          <Link href="/" className="text-sm text-muted hover:text-ink">
-            Back to app
+          <Link href="/" className="text-xs font-medium text-slate-600 transition hover:text-brand">
+            Back home
           </Link>
         </div>
 
-        <div className="mt-10 quill-card p-8">
-          <p className="text-sm font-medium uppercase tracking-[0.18em] text-brand">
+        <div className="mt-10 rounded-[30px] border border-white bg-[#FFFFFF] p-8 shadow-[0_28px_80px_rgba(15,23,42,0.1)] sm:p-10">
+          <p className="text-xs font-semibold uppercase tracking-[0.22em] text-brand">
             Privacy Policy
           </p>
-          <h1 className="mt-4 text-4xl font-semibold text-ink">
+          <h1 className="mt-4 text-4xl font-extrabold tracking-[-0.04em] text-[#15161A]">
             How Quill handles personal information
           </h1>
           <p className="mt-4 max-w-2xl text-sm leading-6 text-muted">
@@ -48,8 +48,8 @@ export default function PrivacyPolicyPage() {
 
           <div className="mt-10 space-y-6">
             {sections.map((section) => (
-              <section key={section.title} className="rounded-xl border border-line p-5">
-                <h2 className="text-lg font-semibold text-ink">{section.title}</h2>
+              <section key={section.title} className="rounded-3xl border border-line bg-[#FAFBFB] p-5">
+                <h2 className="text-lg font-semibold text-[#15161A]">{section.title}</h2>
                 <p className="mt-2 text-sm leading-6 text-muted">{section.body}</p>
               </section>
             ))}
