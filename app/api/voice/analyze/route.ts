@@ -4,6 +4,15 @@ import { requireRequestUser } from "@/lib/auth";
 import { groq } from "@/lib/groq";
 import { prisma } from "@/lib/prisma";
 import {
+  SAMPLE_MIN_LENGTH,
+  MIN_TOTAL_SIGNAL,
+  buildOnboardingVoiceSeed,
+  findLowDiversitySample,
+  findNearDuplicatePair,
+  normalizeSample,
+  stripExactDuplicates,
+} from "@/lib/voice-analysis-quality";
+import {
   getVoiceFoundation,
   getVoiceProfileClientState,
   getVoiceDimensions,
@@ -12,11 +21,6 @@ import {
   voiceSetupSources,
 } from "@/lib/voice-foundations";
 import { parseJsonObject, readRequestJson } from "@/lib/utils";
-
-const SAMPLE_MIN_LENGTH = 40;
-const MIN_TOTAL_SIGNAL = 500;
-const NEAR_DUPLICATE_SIMILARITY = 0.82;
-const MIN_UNIQUE_WORD_RATIO = 0.45;
 
 const analyzeSchema = z
   .object({
@@ -70,99 +74,6 @@ function getMessageText(content: string | Array<{ type?: string; text?: string }
       .join("");
   }
   return "";
-}
-
-function normalizeSample(sample: string) {
-  return sample.trim().replace(/\s+/g, " ");
-}
-
-function tokenize(text: string) {
-  return normalizeSample(text)
-    .toLowerCase()
-    .replace(/[^a-z0-9'\s-]/g, " ")
-    .split(/\s+/)
-    .map((word) => word.trim())
-    .filter(Boolean);
-}
-
-function uniqueWordRatio(text: string) {
-  const words = tokenize(text);
-  if (words.length === 0) return 0;
-  return new Set(words).size / words.length;
-}
-
-function jaccardSimilarity(left: string, right: string) {
-  const leftSet = new Set(tokenize(left));
-  const rightSet = new Set(tokenize(right));
-  if (leftSet.size === 0 || rightSet.size === 0) return 0;
-
-  let intersection = 0;
-  for (const word of leftSet) {
-    if (rightSet.has(word)) {
-      intersection += 1;
-    }
-  }
-
-  const union = new Set([...leftSet, ...rightSet]).size;
-  return union === 0 ? 0 : intersection / union;
-}
-
-function stripExactDuplicates(samples: string[]) {
-  const seen = new Set<string>();
-  const unique: string[] = [];
-
-  for (const sample of samples) {
-    const normalized = normalizeSample(sample).toLowerCase();
-    if (seen.has(normalized)) continue;
-    seen.add(normalized);
-    unique.push(normalizeSample(sample));
-  }
-
-  return unique;
-}
-
-function findNearDuplicatePair(samples: string[]) {
-  for (let index = 0; index < samples.length; index += 1) {
-    for (let otherIndex = index + 1; otherIndex < samples.length; otherIndex += 1) {
-      if (jaccardSimilarity(samples[index], samples[otherIndex]) >= NEAR_DUPLICATE_SIMILARITY) {
-        return [samples[index], samples[otherIndex]] as const;
-      }
-    }
-  }
-
-  return null;
-}
-
-function findLowDiversitySample(samples: string[]) {
-  return samples.find((sample) => {
-    const words = tokenize(sample);
-    return words.length >= 12 && uniqueWordRatio(sample) < MIN_UNIQUE_WORD_RATIO;
-  });
-}
-
-function buildOnboardingVoiceSeed(user: {
-  userType?: string | null;
-  communicationStyle?: string | null;
-  contrarianBelief?: string | null;
-}) {
-  if (user.userType !== "beginner" && user.userType !== "builder") {
-    return null;
-  }
-
-  const parts: string[] = [];
-  if (user.communicationStyle) {
-    parts.push(`The user describes their style as ${user.communicationStyle}.`);
-  }
-  if (user.contrarianBelief) {
-    parts.push(`They believe: '${normalizeSample(user.contrarianBelief)}'.`);
-  }
-
-  if (parts.length === 0) {
-    return null;
-  }
-
-  parts.push("Use this as additional voice signal.");
-  return parts.join(" ");
 }
 
 export async function POST(request: NextRequest) {

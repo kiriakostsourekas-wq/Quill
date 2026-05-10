@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { claimAndPublishPost, PublishConflictError } from "@/lib/publishing";
+import {
+  AUTO_SCHEDULING_ENABLED,
+  AUTO_SCHEDULING_UNAVAILABLE_MESSAGE,
+} from "@/lib/scheduling";
 
 export const runtime = "nodejs";
 
@@ -63,6 +67,17 @@ async function runScheduledPublishSweep() {
 export async function GET(request: NextRequest) {
   if (!isAuthorized(request)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  if (!AUTO_SCHEDULING_ENABLED) {
+    return NextResponse.json({
+      disabled: true,
+      message: AUTO_SCHEDULING_UNAVAILABLE_MESSAGE,
+      scanned: 0,
+      published: 0,
+      skipped: 0,
+      failed: [],
+    });
   }
 
   const result = await runScheduledPublishSweep();

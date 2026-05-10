@@ -204,6 +204,13 @@ function checkVoiceSampleOverlap(text: string, samplePosts: string[]): VoiceOver
   };
 }
 
+export const voiceDnaTestHelpers = {
+  checkVoiceSampleOverlap,
+  clampScore,
+  normalizeSuggestions,
+  pickWeakestSentence,
+};
+
 function buildSignaturePhraseCandidates(profile: VoiceProfile) {
   const phraseCounts = new Map<string, number>();
 
