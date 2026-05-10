@@ -19,7 +19,7 @@ vi.mock("@/lib/prisma", () => ({
 
 vi.mock("@/lib/encrypt", () => cryptoMock);
 
-import { getFreshLinkedInAccount } from "@/lib/linkedin";
+import { getFreshLinkedInAccount, getLinkedInAuthUrl } from "@/lib/linkedin";
 import { getFreshTwitterAccount } from "@/lib/twitter";
 
 function account(overrides: Record<string, unknown> = {}) {
@@ -43,6 +43,23 @@ describe("provider token refresh", () => {
     process.env.TWITTER_CLIENT_SECRET = "twitter-secret";
     process.env.LINKEDIN_CLIENT_ID = "linkedin-client";
     process.env.LINKEDIN_CLIENT_SECRET = "linkedin-secret";
+    delete process.env.LINKEDIN_READ_POSTS_ENABLED;
+  });
+
+  it("keeps LinkedIn publishing OAuth scopes unchanged by default", () => {
+    const url = new URL(getLinkedInAuthUrl("state-1"));
+
+    expect(url.searchParams.get("scope")).toBe("openid profile email w_member_social");
+  });
+
+  it("requests LinkedIn read scope only for enabled import OAuth", () => {
+    process.env.LINKEDIN_READ_POSTS_ENABLED = "true";
+
+    const url = new URL(getLinkedInAuthUrl("state-1", { includeReadPostsScope: true }));
+
+    expect(url.searchParams.get("scope")).toBe(
+      "openid profile email w_member_social r_member_social"
+    );
   });
 
   it("refreshes Twitter tokens and returns the updated access token", async () => {

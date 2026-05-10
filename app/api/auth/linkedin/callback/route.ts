@@ -12,6 +12,7 @@ type LinkedInStateCookie = {
   state: string;
   userId: string | null;
   returnTo?: string | null;
+  intent?: string | null;
 };
 
 type LinkedInProfile = {
@@ -72,7 +73,12 @@ export async function GET(request: NextRequest) {
   const payload = readOAuthCookie<LinkedInStateCookie>(request, LINKEDIN_OAUTH_COOKIE_NAME);
 
   if (providerError) {
-    const response = buildFailureRedirect(request, "/login?error=linkedin_denied");
+    const response = buildFailureRedirect(
+      request,
+      payload?.intent === "import" && payload.returnTo?.startsWith("/")
+        ? "/voice-dna/import?error=linkedin_denied"
+        : "/login?error=linkedin_denied"
+    );
     clearOAuthCookie(response, LINKEDIN_OAUTH_COOKIE_NAME);
     return response;
   }
