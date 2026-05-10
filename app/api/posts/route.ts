@@ -101,11 +101,69 @@ export async function GET(request: NextRequest) {
   }
 
   const status = request.nextUrl.searchParams.get("status");
+  const view = request.nextUrl.searchParams.get("view");
+  const where = {
+    userId: user.id,
+    ...(status ? { status } : {}),
+  };
+  const includePublishAttempts = view === "publish-status";
+
+  if (includePublishAttempts || view === "delivery-status") {
+    const posts = await prisma.post.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      select: {
+        id: true,
+        postType: true,
+        content: true,
+        firstComment: true,
+        platforms: true,
+        status: true,
+        scheduledAt: true,
+        publishedAt: true,
+        createdAt: true,
+        errorLog: true,
+        voiceScore: true,
+        voiceToneScore: true,
+        voiceRhythmScore: true,
+        voiceWordChoiceScore: true,
+        voiceSafeToPublish: true,
+        deliveries: {
+          orderBy: { platform: "asc" },
+          select: {
+            platform: true,
+            status: true,
+            publishedAt: true,
+            errorLog: true,
+            attemptCount: true,
+            lastAttemptAt: true,
+          },
+        },
+        ...(includePublishAttempts
+          ? {
+              publishAttempts: {
+                orderBy: { createdAt: "desc" },
+                take: 8,
+                select: {
+                  id: true,
+                  platform: true,
+                  trigger: true,
+                  status: true,
+                  errorLog: true,
+                  createdAt: true,
+                  completedAt: true,
+                },
+              },
+            }
+          : {}),
+      },
+    });
+
+    return NextResponse.json({ posts });
+  }
+
   const posts = await prisma.post.findMany({
-    where: {
-      userId: user.id,
-      ...(status ? { status } : {}),
-    },
+    where,
     orderBy: { createdAt: "desc" },
     include: {
       deliveries: {

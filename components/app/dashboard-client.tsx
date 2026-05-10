@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { AlertTriangle } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -15,12 +16,46 @@ type PostRecord = {
   platforms: string[];
   status: string;
   createdAt: string;
+  errorLog?: string | null;
   voiceScore?: number | null;
   voiceToneScore?: number | null;
   voiceRhythmScore?: number | null;
   voiceWordChoiceScore?: number | null;
   voiceSafeToPublish?: boolean | null;
+  deliveries?: Array<{
+    platform: string;
+    status: string;
+    errorLog?: string | null;
+    attemptCount?: number | null;
+    lastAttemptAt?: string | null;
+  }>;
 };
+
+function getPlatformLabel(platform: string) {
+  if (platform === "twitter" || platform === "x") return "X";
+  if (platform === "linkedin") return "LinkedIn";
+  return platform;
+}
+
+function getFailureSummary(post: PostRecord) {
+  const failedDeliveries =
+    post.deliveries?.filter(
+      (delivery) =>
+        delivery.status === "failed" ||
+        Boolean(delivery.errorLog) ||
+        (post.status === "failed" && delivery.status !== "published")
+    ) ?? [];
+
+  if (failedDeliveries.length > 0) {
+    return `${failedDeliveries.map((delivery) => getPlatformLabel(delivery.platform)).join(", ")} failed`;
+  }
+
+  if (post.status === "failed") {
+    return post.errorLog ?? "Publishing incomplete";
+  }
+
+  return null;
+}
 
 export function DashboardClient() {
   const router = useRouter();
@@ -30,7 +65,7 @@ export function DashboardClient() {
   const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch("/api/posts")
+    fetch("/api/posts?view=delivery-status")
       .then(async (response) => {
         const data = await response.json().catch(() => ({}));
         if (!response.ok) {
@@ -61,6 +96,7 @@ export function DashboardClient() {
       published: posts.filter((post) => post.status === "published").length,
       scheduled: posts.filter((post) => ["scheduled", "publishing"].includes(post.status)).length,
       draft: posts.filter((post) => post.status === "draft").length,
+      failed: posts.filter((post) => post.status === "failed").length,
     }),
     [posts]
   );
@@ -76,9 +112,9 @@ export function DashboardClient() {
         </p>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-4">
         {loading
-          ? Array.from({ length: 3 }).map((_, index) => (
+          ? Array.from({ length: 4 }).map((_, index) => (
               <div key={index} className="quill-card p-5">
                 <div className="h-4 w-24 animate-pulse rounded bg-slate-200" />
                 <div className="mt-4 h-9 w-16 animate-pulse rounded bg-slate-200" />
@@ -88,10 +124,19 @@ export function DashboardClient() {
               { label: "Total Published", value: metrics.published },
               { label: "Scheduled", value: metrics.scheduled },
               { label: "Draft", value: metrics.draft },
+              { label: "Needs Attention", value: metrics.failed },
             ].map((metric) => (
               <div key={metric.label} className="quill-card p-5">
                 <p className="text-sm text-muted">{metric.label}</p>
-                <p className="mt-3 text-3xl font-semibold text-ink">{metric.value}</p>
+                <p
+                  className={`mt-3 text-3xl font-semibold ${
+                    metric.label === "Needs Attention" && metric.value > 0
+                      ? "text-red-600"
+                      : "text-ink"
+                  }`}
+                >
+                  {metric.value}
+                </p>
               </div>
             ))}
       </div>
@@ -147,36 +192,48 @@ export function DashboardClient() {
                   </td>
                 </tr>
               )}
-              {recentPosts.map((post) => (
-                <tr key={post.id}>
-                  <td className="max-w-xl px-5 py-4 text-ink">
-                    <p className="line-clamp-2">{post.content}</p>
-                  </td>
-                  <td className="px-5 py-4">
-                    <VoiceScoreBadge
-                      score={post.voiceScore}
-                      toneScore={post.voiceToneScore}
-                      rhythmScore={post.voiceRhythmScore}
-                      wordChoiceScore={post.voiceWordChoiceScore}
-                      safeToPublish={post.voiceSafeToPublish}
-                      variant="compact"
-                    />
-                  </td>
-                  <td className="px-5 py-4">
-                    <div className="flex gap-2">
-                      {post.platforms.map((platform) => (
-                        <PlatformBadge key={`${post.id}-${platform}`} platform={platform} />
-                      ))}
-                    </div>
-                  </td>
-                  <td className="px-5 py-4">
-                    <StatusBadge value={post.status} />
-                  </td>
-                  <td className="px-5 py-4 text-muted">
-                    {new Date(post.createdAt).toLocaleDateString()}
-                  </td>
-                </tr>
-              ))}
+              {recentPosts.map((post) => {
+                const failureSummary = getFailureSummary(post);
+
+                return (
+                  <tr key={post.id}>
+                    <td className="max-w-xl px-5 py-4 text-ink">
+                      <p className="line-clamp-2">{post.content}</p>
+                    </td>
+                    <td className="px-5 py-4">
+                      <VoiceScoreBadge
+                        score={post.voiceScore}
+                        toneScore={post.voiceToneScore}
+                        rhythmScore={post.voiceRhythmScore}
+                        wordChoiceScore={post.voiceWordChoiceScore}
+                        safeToPublish={post.voiceSafeToPublish}
+                        variant="compact"
+                      />
+                    </td>
+                    <td className="px-5 py-4">
+                      <div className="flex gap-2">
+                        {post.platforms.map((platform) => (
+                          <PlatformBadge key={`${post.id}-${platform}`} platform={platform} />
+                        ))}
+                      </div>
+                    </td>
+                    <td className="px-5 py-4">
+                      <div className="space-y-2">
+                        <StatusBadge value={post.status} />
+                        {failureSummary && (
+                          <div className="flex max-w-[13rem] items-start gap-1.5 text-xs leading-5 text-red-600">
+                            <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                            <span>{failureSummary}</span>
+                          </div>
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-5 py-4 text-muted">
+                      {new Date(post.createdAt).toLocaleDateString()}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

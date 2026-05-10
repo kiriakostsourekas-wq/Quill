@@ -178,6 +178,19 @@ function splitLongSentence(sentence: string, limit: number) {
   let current = "";
 
   for (const word of words) {
+    if (word.length > limit) {
+      if (current) {
+        chunks.push(current);
+        current = "";
+      }
+
+      for (let index = 0; index < word.length; index += limit) {
+        chunks.push(word.slice(index, index + limit));
+      }
+
+      continue;
+    }
+
     const next = current ? `${current} ${word}` : word;
     if (next.length <= limit) {
       current = next;
@@ -197,7 +210,7 @@ function splitLongSentence(sentence: string, limit: number) {
   return chunks;
 }
 
-function splitIntoThread(text: string, limit = 280) {
+export function splitIntoThread(text: string, limit = 280) {
   if (text.length <= limit) {
     return [text];
   }

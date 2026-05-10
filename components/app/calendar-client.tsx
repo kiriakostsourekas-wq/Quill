@@ -20,7 +20,7 @@ import {
   startOfWeek,
   subMonths,
 } from "date-fns";
-import { ChevronLeft, ChevronRight, Pencil, Trash2, X } from "lucide-react";
+import { AlertTriangle, ChevronLeft, ChevronRight, Pencil, Trash2, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -73,6 +73,10 @@ function getDisplayText(post: CalendarPost) {
   }
 
   return post.content.trim() || "Untitled post";
+}
+
+function isFailedPost(post: CalendarPost) {
+  return post.status === "failed";
 }
 
 function truncateLabel(value: string, max = 30) {
@@ -274,45 +278,60 @@ export function CalendarClient() {
         </div>
 
         <div className="mt-3 space-y-2">
-          {dayEvents.map((event) => (
-            <button
-              key={event.id}
-              type="button"
-              onClick={(clickEvent) => {
-                clickEvent.stopPropagation();
-                setSelectedPost(event.post);
-              }}
-              className="flex w-full items-center gap-2 rounded-lg border border-line bg-slate-50 px-2 py-2 text-left text-xs text-ink transition hover:border-brand/30 hover:bg-white"
-            >
-              <div className="min-w-0 flex-1">
-                <span className="block truncate">{truncateLabel(getDisplayText(event.post))}</span>
-                <div className="mt-1">
-                  <VoiceScoreBadge
-                    score={event.post.voiceScore}
-                    toneScore={event.post.voiceToneScore}
-                    rhythmScore={event.post.voiceRhythmScore}
-                    wordChoiceScore={event.post.voiceWordChoiceScore}
-                    safeToPublish={event.post.voiceSafeToPublish}
-                    variant="compact"
-                    className="origin-left scale-[0.8]"
-                  />
+          {dayEvents.map((event) => {
+            const failed = isFailedPost(event.post);
+
+            return (
+              <button
+                key={event.id}
+                type="button"
+                onClick={(clickEvent) => {
+                  clickEvent.stopPropagation();
+                  setSelectedPost(event.post);
+                }}
+                className={`flex w-full items-center gap-2 rounded-lg border px-2 py-2 text-left text-xs transition ${
+                  failed
+                    ? "border-red-200 bg-red-50 text-red-900 hover:border-red-300 hover:bg-red-50/80"
+                    : "border-line bg-slate-50 text-ink hover:border-brand/30 hover:bg-white"
+                }`}
+              >
+                <div className="min-w-0 flex-1">
+                  <span className="block truncate">{truncateLabel(getDisplayText(event.post))}</span>
+                  <div className="mt-1">
+                    <VoiceScoreBadge
+                      score={event.post.voiceScore}
+                      toneScore={event.post.voiceToneScore}
+                      rhythmScore={event.post.voiceRhythmScore}
+                      wordChoiceScore={event.post.voiceWordChoiceScore}
+                      safeToPublish={event.post.voiceSafeToPublish}
+                      variant="compact"
+                      className="origin-left scale-[0.8]"
+                    />
+                  </div>
                 </div>
-              </div>
-              {event.kind === "published" && (
-                <span className="text-[10px] font-medium uppercase tracking-[0.08em] text-emerald-600">
-                  Published
-                </span>
-              )}
-              <div className="flex items-center gap-1">
-                {event.post.platforms.map((platform) => (
-                  <span
-                    key={`${event.id}-${platform}`}
-                    className={`h-2 w-2 rounded-full ${platformDotClass(platform)}`}
-                  />
-                ))}
-              </div>
-            </button>
-          ))}
+                {failed ? (
+                  <span className="inline-flex items-center gap-1 text-[10px] font-medium uppercase tracking-[0.08em] text-red-600">
+                    <AlertTriangle className="h-3 w-3" />
+                    Failed
+                  </span>
+                ) : (
+                  event.kind === "published" && (
+                    <span className="text-[10px] font-medium uppercase tracking-[0.08em] text-emerald-600">
+                      Published
+                    </span>
+                  )
+                )}
+                <div className="flex items-center gap-1">
+                  {event.post.platforms.map((platform) => (
+                    <span
+                      key={`${event.id}-${platform}`}
+                      className={`h-2 w-2 rounded-full ${platformDotClass(platform)}`}
+                    />
+                  ))}
+                </div>
+              </button>
+            );
+          })}
         </div>
       </div>
     );
@@ -323,13 +342,16 @@ export function CalendarClient() {
     const minute = getMinutes(event.date);
     const totalMinutes = Math.max(0, (hour - 6) * 60 + minute);
     const top = (totalMinutes / 60) * hourSlotHeight;
+    const failed = isFailedPost(event.post);
 
     return (
       <button
         key={event.id}
         type="button"
         onClick={() => setSelectedPost(event.post)}
-        className="absolute left-2 right-2 rounded-xl border border-line bg-white px-3 py-2 text-left shadow-soft"
+        className={`absolute left-2 right-2 rounded-xl border px-3 py-2 text-left shadow-soft ${
+          failed ? "border-red-200 bg-red-50" : "border-line bg-white"
+        }`}
         style={{
           top: `${top + index * 6}px`,
           minHeight: "62px",
@@ -352,7 +374,9 @@ export function CalendarClient() {
           />
         </div>
         <div className="mt-2 flex items-center justify-between text-[11px] text-muted">
-          <span>{event.kind === "published" ? "Published" : format(event.date, "p")}</span>
+          <span className={failed ? "font-medium text-red-600" : undefined}>
+            {failed ? "Failed" : event.kind === "published" ? "Published" : format(event.date, "p")}
+          </span>
           <div className="flex items-center gap-1">
             {event.post.platforms.map((platform) => (
               <span
@@ -525,7 +549,12 @@ export function CalendarClient() {
             <div className="flex items-start justify-between gap-4">
               <div>
                 <p className="text-sm text-muted">
-                  {selectedPost.publishedAt ? "Published" : "Scheduled"} post
+                  {isFailedPost(selectedPost)
+                    ? "Failed"
+                    : selectedPost.publishedAt
+                      ? "Published"
+                      : "Scheduled"}{" "}
+                  post
                 </p>
                 <h2 className="mt-2 text-xl font-semibold text-ink">
                   {selectedPost.postType === "carousel"
@@ -557,6 +586,19 @@ export function CalendarClient() {
             </div>
 
             <div className="mt-6 space-y-4">
+              {isFailedPost(selectedPost) && (
+                <div className="rounded-xl border border-red-200 bg-red-50 p-4">
+                  <div className="flex gap-2">
+                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-red-600" />
+                    <div>
+                      <p className="text-sm font-medium text-red-800">Publishing needs attention</p>
+                      <p className="mt-2 text-sm leading-6 text-red-700">
+                        Open Scheduled to review platform errors and retry unpublished platforms.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
               {selectedPost.postType === "carousel" && selectedPost.status === "scheduled" && (
                 <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
                   <p className="text-sm font-medium text-amber-800">Carousel scheduling is not live</p>
@@ -601,22 +643,33 @@ export function CalendarClient() {
             </div>
 
             <div className="mt-6 flex flex-wrap gap-3">
-              <Link href={`${selectedPost.postType === "carousel" ? "/carousel" : "/compose"}?postId=${selectedPost.id}`}>
-                <Button variant="outline" className="gap-2">
-                  <Pencil className="h-4 w-4" />
-                  Edit
-                </Button>
-              </Link>
-              <Button
-                variant="danger"
-                className="gap-2"
-                onClick={() => {
-                  void deletePost(selectedPost);
-                }}
-              >
-                <Trash2 className="h-4 w-4" />
-                Delete
-              </Button>
+              {isFailedPost(selectedPost) ? (
+                <Link href="/scheduled">
+                  <Button variant="outline" className="gap-2">
+                    <AlertTriangle className="h-4 w-4" />
+                    Review in Scheduled
+                  </Button>
+                </Link>
+              ) : (
+                <>
+                  <Link href={`${selectedPost.postType === "carousel" ? "/carousel" : "/compose"}?postId=${selectedPost.id}`}>
+                    <Button variant="outline" className="gap-2">
+                      <Pencil className="h-4 w-4" />
+                      Edit
+                    </Button>
+                  </Link>
+                  <Button
+                    variant="danger"
+                    className="gap-2"
+                    onClick={() => {
+                      void deletePost(selectedPost);
+                    }}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    Delete
+                  </Button>
+                </>
+              )}
             </div>
           </aside>
         </div>
