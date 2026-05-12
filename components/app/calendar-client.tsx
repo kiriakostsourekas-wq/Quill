@@ -79,6 +79,10 @@ function isFailedPost(post: CalendarPost) {
   return post.status === "failed";
 }
 
+function isMutableCalendarPost(post: CalendarPost) {
+  return post.status !== "published" && post.status !== "publishing" && !post.publishedAt;
+}
+
 function truncateLabel(value: string, max = 30) {
   if (value.length <= max) return value;
   return `${value.slice(0, max)}…`;
@@ -650,7 +654,7 @@ export function CalendarClient() {
                     Review in Scheduled
                   </Button>
                 </Link>
-              ) : (
+              ) : isMutableCalendarPost(selectedPost) ? (
                 <>
                   <Link href={`${selectedPost.postType === "carousel" ? "/carousel" : "/compose"}?postId=${selectedPost.id}`}>
                     <Button variant="outline" className="gap-2">
@@ -669,6 +673,10 @@ export function CalendarClient() {
                     Delete
                   </Button>
                 </>
+              ) : (
+                <Link href="/scheduled">
+                  <Button variant="outline">View in Scheduled</Button>
+                </Link>
               )}
             </div>
           </aside>
