@@ -79,21 +79,21 @@ export function VoiceDnaPanel({
   const hasVoiceProfile = Boolean(profileDimensions || profileStrength);
 
   return (
-    <aside className="quill-card p-6 xl:sticky xl:top-24">
-      <div className="flex items-start justify-between gap-4">
+    <aside className="quill-card p-4 xl:sticky xl:top-24">
+      <div className="flex items-start justify-between gap-3">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand">
             Voice check
           </p>
-          <h2 className="mt-2 text-xl font-semibold text-ink">Voice DNA</h2>
-          <p className="mt-1 text-sm text-muted">
+          <h2 className="mt-1 text-lg font-semibold text-ink">Voice DNA</h2>
+          <p className="mt-1 text-sm leading-5 text-muted">
             {loadingScore
-              ? "Checking how the current draft matches your voice..."
-              : "A supporting quality check while you write and refine."}
+              ? "Checking this draft..."
+              : "Quick quality check while you refine."}
           </p>
         </div>
         {hasVoiceProfile && (
-          <div className="flex items-center gap-2 rounded-full bg-brand-light px-3 py-1 text-xs font-medium text-brand">
+          <div className="flex shrink-0 items-center gap-1.5 rounded-md border border-line bg-surface-muted px-2.5 py-1 text-xs font-medium text-ink">
             <Sparkles className="h-3.5 w-3.5" />
             {profileStrength?.label ?? "Profile loaded"}
           </div>
@@ -104,7 +104,7 @@ export function VoiceDnaPanel({
         <>
           {profileStrength && (
             <div
-              className={`mt-6 rounded-2xl border px-4 py-4 text-sm leading-6 ${
+              className={`mt-4 rounded-md border px-3 py-3 text-sm leading-5 ${
                 profileStrength.state === "weak"
                   ? "border-red-200 bg-red-50"
                   : profileStrength.state === "forming"
@@ -117,7 +117,7 @@ export function VoiceDnaPanel({
             </div>
           )}
 
-          <div className="mt-6 rounded-2xl border border-line bg-slate-50 p-4">
+          <div className="mt-4 rounded-md border border-line bg-slate-50 p-3">
             <VoiceScoreBadge
               score={voice.score}
               toneScore={voice.toneScore}
@@ -129,37 +129,7 @@ export function VoiceDnaPanel({
             />
           </div>
 
-          <div className="mt-4 grid gap-3">
-            <BreakdownRow icon={Mic} label="Tone match" value={voice.toneScore} />
-            <BreakdownRow icon={Activity} label="Sentence rhythm" value={voice.rhythmScore} />
-            <BreakdownRow icon={Type} label="Word choice" value={voice.wordChoiceScore} />
-          </div>
-
-          {profileDimensions && (
-            <div className="mt-6 rounded-2xl border border-line bg-white p-4">
-              <h3 className="text-sm font-semibold text-ink">How you usually write</h3>
-              <div className="mt-3 grid gap-3 text-sm sm:grid-cols-2">
-                <div className="rounded-xl border border-line bg-slate-50 p-3">
-                  <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted">Hooks</p>
-                  <p className="mt-2 leading-6 text-ink">{profileDimensions.hookStyle}</p>
-                </div>
-                <div className="rounded-xl border border-line bg-slate-50 p-3">
-                  <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted">Paragraphs</p>
-                  <p className="mt-2 leading-6 text-ink">{profileDimensions.paragraphStyle}</p>
-                </div>
-                <div className="rounded-xl border border-line bg-slate-50 p-3">
-                  <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted">Story vs teaching</p>
-                  <p className="mt-2 leading-6 text-ink">{profileDimensions.storytellingVsTeaching}</p>
-                </div>
-                <div className="rounded-xl border border-line bg-slate-50 p-3">
-                  <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted">Language</p>
-                  <p className="mt-2 leading-6 text-ink">{profileDimensions.languageStyle}</p>
-                </div>
-              </div>
-            </div>
-          )}
-
-          <div className="mt-6 rounded-2xl border border-line bg-slate-50 p-4">
+          <div className="mt-4 rounded-md border border-line bg-slate-50 p-3">
             <div className="flex items-center gap-2 text-sm font-medium text-ink">
               {voice.safeToPublish ? (
                 <CheckCircle2 className="h-4 w-4 text-emerald-600" />
@@ -172,8 +142,46 @@ export function VoiceDnaPanel({
             {voice.tip && <p className="mt-2 text-sm leading-6 text-muted">{voice.tip}</p>}
           </div>
 
+          <Button
+            variant="outline"
+            className="mt-4 w-full"
+            onClick={onRewrite}
+            disabled={rewriteLoading}
+          >
+            {rewriteLoading ? "Refining..." : "Refine in my voice"}
+          </Button>
+
+          <details className="mt-4 border-t border-line pt-4">
+            <summary className="cursor-pointer text-sm font-medium text-ink">
+              Details and traits
+            </summary>
+
+            <div className="mt-3 grid gap-3">
+              <BreakdownRow icon={Mic} label="Tone match" value={voice.toneScore} />
+              <BreakdownRow icon={Activity} label="Sentence rhythm" value={voice.rhythmScore} />
+              <BreakdownRow icon={Type} label="Word choice" value={voice.wordChoiceScore} />
+            </div>
+
+            {profileDimensions && (
+              <div className="mt-4 space-y-3 text-sm">
+                {[
+                  ["Hooks", profileDimensions.hookStyle],
+                  ["Paragraphs", profileDimensions.paragraphStyle],
+                  ["Story vs teaching", profileDimensions.storytellingVsTeaching],
+                  ["Language", profileDimensions.languageStyle],
+                ].map(([label, value]) => (
+                  <div key={label}>
+                    <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted">
+                      {label}
+                    </p>
+                    <p className="mt-1 leading-6 text-ink">{value}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+
           {(voice.signaturePhrases?.length ?? 0) > 0 ? (
-            <div className="mt-6">
+            <div className="mt-4">
               <div className="flex items-center justify-between gap-3">
                 <h3 className="text-sm font-semibold text-ink">Signature phrases detected</h3>
                 <span className="text-xs text-muted">
@@ -220,18 +228,10 @@ export function VoiceDnaPanel({
               </ol>
             </div>
           )}
-
-          <Button
-            variant="outline"
-            className="mt-6 w-full"
-            onClick={onRewrite}
-            disabled={rewriteLoading}
-          >
-            {rewriteLoading ? "Refining..." : "Refine in my voice"}
-          </Button>
+          </details>
         </>
       ) : (
-        <div className="mt-6 rounded-xl border border-dashed border-brand/30 bg-brand-light/40 p-4 text-sm leading-6 text-muted">
+        <div className="mt-4 rounded-md border border-dashed border-brand/30 bg-brand-light/40 p-4 text-sm leading-6 text-muted">
           Set up Voice DNA first so Quill can generate from ideas, rewrite rough notes, refine
           drafts, and run live authenticity checks in your voice.{" "}
           <Link href="/voice-dna" className="font-medium text-brand hover:underline">

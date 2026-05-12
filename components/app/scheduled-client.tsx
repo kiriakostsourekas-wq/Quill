@@ -6,12 +6,10 @@ import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { PlatformBadge } from "@/components/app/platform-badge";
-import {
-  AUTO_SCHEDULING_ENABLED,
-  AUTO_SCHEDULING_UNAVAILABLE_MESSAGE,
-} from "@/lib/scheduling";
+import { AUTO_SCHEDULING_UNAVAILABLE_MESSAGE } from "@/lib/scheduling";
 import { StatusBadge } from "@/components/app/status-badge";
 import { VoiceScoreBadge } from "@/components/app/voice-score-badge";
+import { cn } from "@/lib/utils";
 
 type DeliveryRecord = {
   platform: string;
@@ -55,6 +53,12 @@ type PostRecord = {
 };
 
 const filters = ["all", "scheduled", "draft", "published", "failed"] as const;
+const showSchedulingDisabledWarning =
+  process.env.NEXT_PUBLIC_AUTO_SCHEDULING_ENABLED === "false";
+
+function getFilterLabel(filter: (typeof filters)[number]) {
+  return filter === "draft" ? "Drafts" : filter;
+}
 
 function formatDateTime(value?: string | null) {
   if (!value) return null;
@@ -188,6 +192,17 @@ export function ScheduledClient({ embedded = false }: { embedded?: boolean }) {
     return posts.filter((post) => post.status === activeFilter);
   }, [activeFilter, posts]);
 
+  const filterCounts = useMemo(
+    () => ({
+      all: posts.length,
+      scheduled: posts.filter((post) => ["scheduled", "publishing"].includes(post.status)).length,
+      draft: posts.filter((post) => post.status === "draft").length,
+      published: posts.filter((post) => post.status === "published").length,
+      failed: posts.filter((post) => post.status === "failed").length,
+    }),
+    [posts]
+  );
+
   async function deletePost(id: string) {
     if (!window.confirm("Delete this post?")) return;
     const response = await fetch(`/api/posts/${id}`, { method: "DELETE" });
@@ -219,7 +234,7 @@ export function ScheduledClient({ embedded = false }: { embedded?: boolean }) {
   }
 
   return (
-    <section className="space-y-6">
+    <section className="space-y-4">
       {!embedded && (
         <div>
           <h1 className="text-2xl font-semibold text-ink">Scheduled</h1>
@@ -230,36 +245,48 @@ export function ScheduledClient({ embedded = false }: { embedded?: boolean }) {
         </div>
       )}
 
-      {!AUTO_SCHEDULING_ENABLED && (
-        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
+      {showSchedulingDisabledWarning && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-700">
           {AUTO_SCHEDULING_UNAVAILABLE_MESSAGE} Existing scheduled posts will stay queued until scheduling is enabled.
         </div>
       )}
 
-      <div className="flex flex-wrap gap-2">
-        {filters.map((filter) => (
-          <button
-            key={filter}
-            type="button"
-            onClick={() => setActiveFilter(filter)}
-            className={`rounded-full px-4 py-2 text-sm font-medium capitalize ${
-              activeFilter === filter
-                ? "bg-brand text-white"
-                : "border border-line bg-white text-muted"
-            }`}
-          >
-            {filter === "draft" ? "Drafts" : filter}
-          </button>
-        ))}
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="inline-flex flex-wrap gap-1 rounded-full border border-line bg-surface p-1">
+          {filters.map((filter) => (
+            <button
+              key={filter}
+              type="button"
+              onClick={() => setActiveFilter(filter)}
+              className={cn(
+                "inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium capitalize transition",
+                activeFilter === filter ? "bg-brand text-white" : "text-muted hover:text-brand"
+              )}
+            >
+              <span>{getFilterLabel(filter)}</span>
+              <span
+                className={cn(
+                  "rounded-full px-1.5 py-0.5 text-[10px]",
+                  activeFilter === filter ? "bg-white/20 text-white" : "bg-white text-muted"
+                )}
+              >
+                {filterCounts[filter]}
+              </span>
+            </button>
+          ))}
+        </div>
+        <p className="text-xs text-muted">
+          Showing {visiblePosts.length} of {posts.length}
+        </p>
       </div>
 
       <div className="quill-card divide-y divide-line overflow-hidden">
         {visiblePosts.length === 0 ? (
-          <div className="flex flex-col items-center px-6 py-16 text-center">
-            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-brand-light text-brand">
-              <Pencil className="h-6 w-6" />
+          <div className="flex flex-col items-center px-6 py-12 text-center">
+            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-brand-light text-brand">
+              <Pencil className="h-5 w-5" />
             </div>
-            <h2 className="mt-4 text-xl font-semibold text-ink">No posts yet.</h2>
+            <h2 className="mt-4 text-lg font-semibold text-ink">No posts yet.</h2>
             <p className="mt-2 max-w-md text-sm text-muted">
               Start building your queue and Quill will keep everything organized here.
             </p>
@@ -282,11 +309,17 @@ export function ScheduledClient({ embedded = false }: { embedded?: boolean }) {
             const canDelete = post.status !== "publishing" && !hasPublishedDelivery;
 
             return (
-              <div key={post.id} className="flex flex-col gap-4 px-5 py-4 lg:flex-row lg:items-start">
+              <div
+                key={post.id}
+                className={cn(
+                  "grid gap-3 px-4 py-3 lg:grid-cols-[minmax(0,1fr)_150px_auto] lg:items-start",
+                  post.status === "failed" && "bg-red-50/30"
+                )}
+              >
                 <div className="min-w-0 flex-1">
                   {isCarousel ? (
                     <div>
-                      <div className="inline-flex rounded-full bg-brand-light px-3 py-1 text-xs font-medium text-brand">
+                      <div className="inline-flex rounded-full bg-brand-light px-2.5 py-1 text-xs font-medium text-brand">
                         Carousel
                       </div>
                       {post.status === "scheduled" && (
@@ -302,9 +335,9 @@ export function ScheduledClient({ embedded = false }: { embedded?: boolean }) {
                       )}
                     </div>
                   ) : (
-                    <p className="line-clamp-2 text-sm leading-6 text-ink">{post.content}</p>
+                    <p className="line-clamp-2 text-sm leading-5 text-ink">{post.content}</p>
                   )}
-                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <div className="mt-2 flex flex-wrap items-center gap-1.5">
                     {post.platforms.map((platform) => (
                       <PlatformBadge key={`${post.id}-${platform}`} platform={platform} />
                     ))}
@@ -320,7 +353,7 @@ export function ScheduledClient({ embedded = false }: { embedded?: boolean }) {
                   </div>
 
                   {showDeliveryDetails && (
-                    <div className="mt-4 rounded-lg border border-red-200 bg-red-50/60 p-3">
+                    <div className="mt-3 rounded-lg border border-red-200 bg-red-50/70 p-3">
                       <div className="flex gap-2">
                         <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-red-600" />
                         <div>
@@ -340,7 +373,7 @@ export function ScheduledClient({ embedded = false }: { embedded?: boolean }) {
                         </div>
                       </div>
 
-                      <div className="mt-3 space-y-2">
+                      <div className="mt-3 space-y-1.5">
                         {deliveryRows.map((delivery) => {
                           const latestAttempt = getLatestAttempt(post, delivery.platform);
                           const tone = getDeliveryTone(delivery);
@@ -420,34 +453,37 @@ export function ScheduledClient({ embedded = false }: { embedded?: boolean }) {
                   )}
                 </div>
 
-                <div className="text-sm text-muted lg:w-48">
-                  {post.scheduledAt
-                    ? new Date(post.scheduledAt).toLocaleString()
-                    : new Date(post.createdAt).toLocaleDateString()}
+                <div className="text-xs leading-5 text-muted lg:text-right">
+                  {formatDateTime(post.scheduledAt ?? post.publishedAt ?? post.createdAt) ??
+                    "No date"}
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2 lg:justify-end">
                   {canRetry && !isCarousel ? (
-                    <Button variant="outline" className="gap-2" onClick={() => retryPost(post)}>
+                    <Button
+                      variant="outline"
+                      className="h-8 gap-2 px-3 text-xs"
+                      onClick={() => retryPost(post)}
+                    >
                       <RotateCcw className="h-4 w-4" />
-                      Retry failed platforms
+                      Retry failed
                     </Button>
                   ) : canEdit ? (
                     <Link href={`${isCarousel ? "/carousel" : "/compose"}?postId=${post.id}`}>
-                      <Button variant="outline" className="gap-2">
+                      <Button variant="outline" className="h-8 gap-2 px-3 text-xs">
                         <Pencil className="h-4 w-4" />
                         {isCarousel ? "Open carousel" : "Edit"}
                       </Button>
                     </Link>
                   ) : (
-                    <Button variant="outline" className="gap-2" disabled>
+                    <Button variant="outline" className="h-8 gap-2 px-3 text-xs" disabled>
                       <Pencil className="h-4 w-4" />
                       Edit
                     </Button>
                   )}
                   <Button
                     variant="danger"
-                    className="gap-2"
+                    className="h-8 gap-2 px-3 text-xs"
                     onClick={() => deletePost(post.id)}
                     disabled={!canDelete}
                   >

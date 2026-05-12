@@ -98,6 +98,13 @@ state first, then resolve those exact migration names as applied too.
 8. Create an external HTTP scheduler, such as cron-job.org, to call `GET https://<your-domain>/api/cron/publish` every 5 minutes with `Authorization: Bearer <CRON_SECRET>`.
 9. After the scheduler succeeds, set `NEXT_PUBLIC_AUTO_SCHEDULING_ENABLED=true` in Vercel production and redeploy so the UI/API allow scheduled text posts.
 
+Optional LinkedIn post import uses LinkedIn's official Posts API. Keep
+`LINKEDIN_READ_POSTS_ENABLED=false` and
+`NEXT_PUBLIC_LINKEDIN_READ_POSTS_ENABLED=false` unless the LinkedIn app has
+approved `r_member_social` access. `LINKEDIN_API_VERSION` defaults to `202602`.
+When read access is unavailable, users should import their LinkedIn export CSV
+from the Voice DNA import page.
+
 ## Scheduled Publishing
 
 Scheduled publishing on Vercel Hobby must use an external HTTP scheduler. Vercel Cron is not configured in `vercel.json` because the five-minute cadence is not deployable on Hobby.

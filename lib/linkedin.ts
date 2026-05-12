@@ -5,7 +5,11 @@ import { decrypt, encrypt } from "@/lib/encrypt";
 import { safeJson } from "@/lib/utils";
 
 const LINKEDIN_SCOPES = ["openid", "profile", "email", "w_member_social"];
+const LINKEDIN_READ_POSTS_SCOPE = "r_member_social";
+const LINKEDIN_REST_VERSION = process.env.LINKEDIN_API_VERSION ?? "202602";
 const TOKEN_REFRESH_WINDOW_MS = 10 * 60 * 1000;
+const LINKEDIN_POST_IMPORT_PAGE_SIZE = 100;
+const LINKEDIN_POST_IMPORT_MAX_PAGES = 3;
 
 function baseUrl() {
   return process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
@@ -25,13 +29,24 @@ export function assertLinkedInAuthConfig() {
   }
 }
 
-export function getLinkedInAuthUrl(state = randomBytes(16).toString("hex")) {
+export function isLinkedInReadPostsEnabled() {
+  return process.env.LINKEDIN_READ_POSTS_ENABLED === "true";
+}
+
+export function getLinkedInAuthUrl(
+  state = randomBytes(16).toString("hex"),
+  options: { includeReadPostsScope?: boolean } = {}
+) {
   assertLinkedInAuthConfig();
+  const scopes =
+    options.includeReadPostsScope && isLinkedInReadPostsEnabled()
+      ? [...LINKEDIN_SCOPES, LINKEDIN_READ_POSTS_SCOPE]
+      : LINKEDIN_SCOPES;
   const url = new URL("https://www.linkedin.com/oauth/v2/authorization");
   url.searchParams.set("response_type", "code");
   url.searchParams.set("client_id", process.env.LINKEDIN_CLIENT_ID ?? "");
   url.searchParams.set("redirect_uri", `${baseUrl()}/api/auth/linkedin/callback`);
-  url.searchParams.set("scope", LINKEDIN_SCOPES.join(" "));
+  url.searchParams.set("scope", scopes.join(" "));
   url.searchParams.set("state", state);
   return url.toString();
 }
@@ -139,6 +154,133 @@ export async function getFreshLinkedInAccount(account: SocialAccount) {
       account,
     };
   }
+}
+
+type LinkedInPostsResponse = {
+  elements?: LinkedInPostElement[];
+  paging?: {
+    links?: Array<{
+      rel?: string;
+      href?: string;
+    }>;
+  };
+};
+
+type LinkedInPostElement = {
+  commentary?: unknown;
+  content?: {
+    commentary?: unknown;
+  };
+  specificContent?: {
+    "com.linkedin.ugc.ShareContent"?: {
+      shareCommentary?: {
+        text?: unknown;
+      };
+    };
+  };
+};
+
+export class LinkedInPostImportError extends Error {
+  constructor(
+    message: string,
+    public readonly status: number,
+    public readonly details?: string
+  ) {
+    super(message);
+    this.name = "LinkedInPostImportError";
+  }
+}
+
+export function getLinkedInRestVersion() {
+  return process.env.LINKEDIN_API_VERSION ?? LINKEDIN_REST_VERSION;
+}
+
+function getNextLinkedInPageStart(response: LinkedInPostsResponse, currentStart: number) {
+  const nextLink = response.paging?.links?.find((link) => link.rel === "next");
+  if (!nextLink) return null;
+
+  if (nextLink.href) {
+    try {
+      const nextUrl = new URL(nextLink.href, "https://api.linkedin.com");
+      const rawStart = nextUrl.searchParams.get("start");
+      const nextStart = rawStart === null ? null : Number(rawStart);
+      if (nextStart !== null && Number.isFinite(nextStart) && nextStart > currentStart) {
+        return nextStart;
+      }
+    } catch {
+      // Fall back to count-based pagination when LinkedIn returns a relative link.
+    }
+  }
+
+  return currentStart + LINKEDIN_POST_IMPORT_PAGE_SIZE;
+}
+
+function extractLinkedInPostText(post: LinkedInPostElement) {
+  if (typeof post.commentary === "string") {
+    return post.commentary;
+  }
+
+  if (typeof post.content?.commentary === "string") {
+    return post.content.commentary;
+  }
+
+  const legacyText =
+    post.specificContent?.["com.linkedin.ugc.ShareContent"]?.shareCommentary?.text;
+  if (typeof legacyText === "string") {
+    return legacyText;
+  }
+
+  return "";
+}
+
+export function extractLinkedInPostTexts(posts: LinkedInPostElement[]) {
+  return posts.map(extractLinkedInPostText).filter(Boolean);
+}
+
+export async function fetchLinkedInAuthoredPosts(accessToken: string, authorUrn: string) {
+  const texts: string[] = [];
+  let start = 0;
+
+  for (let page = 0; page < LINKEDIN_POST_IMPORT_MAX_PAGES; page += 1) {
+    const url = new URL("https://api.linkedin.com/rest/posts");
+    url.searchParams.set("author", authorUrn);
+    url.searchParams.set("q", "author");
+    url.searchParams.set("count", String(LINKEDIN_POST_IMPORT_PAGE_SIZE));
+    url.searchParams.set("start", String(start));
+    url.searchParams.set("sortBy", "LAST_MODIFIED");
+
+    const response = await fetch(url.toString(), {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "X-Restli-Protocol-Version": "2.0.0",
+        "X-RestLi-Method": "FINDER",
+        "LinkedIn-Version": getLinkedInRestVersion(),
+      },
+      cache: "no-store",
+    });
+
+    if (!response.ok) {
+      const details = await response.text();
+      throw new LinkedInPostImportError(
+        `LinkedIn post import failed (${response.status})`,
+        response.status,
+        details || undefined
+      );
+    }
+
+    const body = await safeJson<LinkedInPostsResponse>(response);
+    const elements = body.elements ?? [];
+    texts.push(...extractLinkedInPostTexts(elements));
+
+    const nextStart = getNextLinkedInPageStart(body, start);
+    if (nextStart === null || elements.length === 0) {
+      break;
+    }
+
+    start = nextStart;
+  }
+
+  return texts;
 }
 
 export async function postToLinkedIn(

@@ -3,7 +3,7 @@
 import Papa from "papaparse";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, CheckCircle2, Loader2, UploadCloud } from "lucide-react";
+import { ArrowLeft, CheckCircle2, FileText, Linkedin, Loader2, UploadCloud } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { cn, safeJson } from "@/lib/utils";
@@ -26,6 +26,8 @@ type AcceptPostResponse = {
 };
 type ImportPostsResponse = {
   error?: string;
+  code?: string;
+  fallback?: "csv";
   posts: string[];
   total: number;
 };
@@ -55,6 +57,7 @@ export function VoiceDnaImportClient({
   initialStrength,
   initialSampleCount,
 }: VoiceDnaImportClientProps) {
+  const linkedinReadPostsEnabled = process.env.NEXT_PUBLIC_LINKEDIN_READ_POSTS_ENABLED === "true";
   const storageKey = useMemo(() => `quill-voice-dna-import:${userId}`, [userId]);
   const [hydrated, setHydrated] = useState(false);
   const [step, setStep] = useState<ImportStep>("upload");
@@ -64,7 +67,9 @@ export function VoiceDnaImportClient({
   const [currentStrength, setCurrentStrength] = useState(initialStrength);
   const [sampleCount, setSampleCount] = useState(initialSampleCount);
   const [uploading, setUploading] = useState(false);
+  const [importingLinkedIn, setImportingLinkedIn] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [fallbackMessage, setFallbackMessage] = useState<string | null>(null);
 
   useEffect(() => {
     try {
@@ -113,8 +118,23 @@ export function VoiceDnaImportClient({
   const currentPost = posts[currentIndex] ?? null;
   const reviewProgress = `${currentIndex} of ${posts.length} reviewed`;
 
+  function applyImportedPosts(data: ImportPostsResponse) {
+    setPosts(data.posts);
+    setCurrentIndex(0);
+    setAddedCount(0);
+    setStep("upload");
+
+    if (data.total === 0) {
+      toast.message("No new LinkedIn posts matched the import criteria.");
+      return;
+    }
+
+    toast.success(`We found ${data.total} posts to review.`);
+  }
+
   async function importPostsFromCsv(file: File) {
     setUploading(true);
+    setFallbackMessage(null);
 
     try {
       const extractedPosts = await new Promise<string[]>((resolve, reject) => {
@@ -147,21 +167,40 @@ export function VoiceDnaImportClient({
         throw new Error(data.error ?? "Unable to import posts");
       }
 
-      setPosts(data.posts);
-      setCurrentIndex(0);
-      setAddedCount(0);
-      setStep("upload");
-
-      if (data.total === 0) {
-        toast.message("No new LinkedIn posts matched the import criteria.");
-        return;
-      }
-
-      toast.success(`We found ${data.total} posts to review.`);
+      applyImportedPosts(data);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Unable to import posts");
     } finally {
       setUploading(false);
+    }
+  }
+
+  async function importPostsFromLinkedIn() {
+    setImportingLinkedIn(true);
+    setFallbackMessage(null);
+
+    try {
+      const response = await fetch("/api/voice-dna/import-linkedin", {
+        method: "POST",
+      });
+
+      const data = await safeJson<ImportPostsResponse>(response);
+      if (!response.ok) {
+        if (data.fallback === "csv") {
+          const message = data.error ?? "Upload your LinkedIn export CSV instead.";
+          setFallbackMessage(message);
+          toast.message(message);
+          return;
+        }
+
+        throw new Error(data.error ?? "Unable to import LinkedIn posts");
+      }
+
+      applyImportedPosts(data);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Unable to import LinkedIn posts");
+    } finally {
+      setImportingLinkedIn(false);
     }
   }
 
@@ -278,7 +317,7 @@ export function VoiceDnaImportClient({
               onClick={resetImportState}
               className="inline-flex h-12 items-center justify-center rounded-xl border border-line px-5 text-sm font-medium text-muted transition hover:border-brand/20 hover:text-brand"
             >
-              Import another CSV
+              Import more posts
             </button>
           </div>
         </div>
@@ -297,43 +336,125 @@ export function VoiceDnaImportClient({
       </Link>
 
       {step === "upload" ? (
-        <div className="quill-card p-8">
-          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-light text-brand">
-            <UploadCloud className="h-6 w-6" />
+        <div className="space-y-6">
+          <div>
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-light text-brand">
+              <UploadCloud className="h-6 w-6" />
+            </div>
+            <h1 className="mt-6 text-3xl font-semibold text-ink">Import your LinkedIn posts</h1>
+            <p className="mt-3 max-w-3xl text-sm leading-6 text-muted">
+              Build your Voice DNA from posts you already wrote. Review every imported post before
+              it becomes part of your profile.
+            </p>
           </div>
-          <h1 className="mt-6 text-3xl font-semibold text-ink">Import your LinkedIn posts</h1>
-          <p className="mt-3 max-w-3xl text-sm leading-6 text-muted">
-            Download your LinkedIn data: Go to LinkedIn → Settings → Data Privacy → Get a copy of
-            your data → select &apos;Posts&apos; → request archive → upload the Posts.csv file here
-          </p>
 
-          <div className="mt-8 space-y-4">
-            <input
-              type="file"
-              accept=".csv,text/csv"
-              disabled={uploading}
-              onChange={(event) => {
-                const file = event.target.files?.[0];
-                if (!file) return;
-                void importPostsFromCsv(file);
-                event.currentTarget.value = "";
-              }}
-              className="block w-full text-sm text-muted file:mr-4 file:rounded-xl file:border-0 file:bg-brand-light file:px-4 file:py-3 file:text-sm file:font-medium file:text-brand hover:file:bg-brand-light/80"
-            />
+          <div
+            className={cn(
+              "grid gap-4",
+              linkedinReadPostsEnabled ? "lg:grid-cols-2" : "lg:grid-cols-1"
+            )}
+          >
+            {linkedinReadPostsEnabled && (
+              <div className="quill-card p-6">
+                <div className="flex items-start gap-4">
+                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#E8F1FC] text-[#0A66C2]">
+                    <Linkedin className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-semibold text-ink">Import from LinkedIn</h2>
+                    <p className="mt-2 text-sm leading-6 text-muted">
+                      Uses LinkedIn&apos;s official Posts API when your app and account have
+                      approved read access.
+                    </p>
+                  </div>
+                </div>
 
-            {posts.length > 0 && (
-              <div className="rounded-2xl border border-line bg-slate-50 p-5">
-                <p className="text-sm font-medium text-ink">We found {posts.length} posts to review</p>
-                <Button
-                  className="mt-4 h-12 rounded-xl"
-                  onClick={beginReview}
-                  disabled={uploading}
-                >
-                  Start reviewing
-                </Button>
+                {fallbackMessage && (
+                  <div className="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-800">
+                    {fallbackMessage}
+                  </div>
+                )}
+
+                <div className="mt-6 space-y-3">
+                  <Button
+                    className="h-12 w-full rounded-xl"
+                    onClick={() => {
+                      void importPostsFromLinkedIn();
+                    }}
+                    disabled={importingLinkedIn || uploading}
+                  >
+                    {importingLinkedIn ? (
+                      <span className="flex items-center gap-2">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Importing
+                      </span>
+                    ) : (
+                      <span className="flex items-center gap-2">
+                        <Linkedin className="h-4 w-4" />
+                        Import posts
+                      </span>
+                    )}
+                  </Button>
+                  <form action="/api/auth/linkedin" method="post">
+                    <input type="hidden" name="intent" value="import" />
+                    <Button
+                      type="submit"
+                      variant="outline"
+                      className="h-12 w-full rounded-xl"
+                      disabled={uploading || importingLinkedIn}
+                    >
+                      <span className="flex items-center gap-2">
+                        <Linkedin className="h-4 w-4" />
+                        Connect or authorize LinkedIn
+                      </span>
+                    </Button>
+                  </form>
+                </div>
               </div>
             )}
+
+            <div className="quill-card p-6">
+              <div className="flex items-start gap-4">
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-700">
+                  <FileText className="h-5 w-5" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-semibold text-ink">Upload LinkedIn export CSV</h2>
+                  <p className="mt-2 text-sm leading-6 text-muted">
+                    Use the Posts.csv file from LinkedIn&apos;s data export. This fallback stays
+                    available in production.
+                  </p>
+                </div>
+              </div>
+
+              <input
+                type="file"
+                accept=".csv,text/csv"
+                aria-label="Upload LinkedIn export CSV"
+                disabled={uploading || importingLinkedIn}
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  if (!file) return;
+                  void importPostsFromCsv(file);
+                  event.currentTarget.value = "";
+                }}
+                className="mt-6 block w-full text-sm text-muted file:mr-4 file:rounded-xl file:border-0 file:bg-brand-light file:px-4 file:py-3 file:text-sm file:font-medium file:text-brand hover:file:bg-brand-light/80"
+              />
+            </div>
           </div>
+
+          {posts.length > 0 && (
+            <div className="quill-card p-5">
+              <p className="text-sm font-medium text-ink">We found {posts.length} posts to review</p>
+              <Button
+                className="mt-4 h-12 rounded-xl"
+                onClick={beginReview}
+                disabled={uploading || importingLinkedIn}
+              >
+                Start reviewing
+              </Button>
+            </div>
+          )}
         </div>
       ) : (
         <div className="space-y-6">

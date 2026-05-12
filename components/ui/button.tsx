@@ -18,7 +18,7 @@ export function Button({
         "inline-flex h-10 items-center justify-center rounded-md px-4 text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/20 disabled:cursor-not-allowed disabled:opacity-60",
         variant === "primary" && "bg-brand text-white hover:bg-brand/90",
         variant === "outline" &&
-          "border border-brand/20 bg-surface text-brand hover:bg-brand-light dark:hover:bg-brand-light/30",
+          "border border-line bg-surface text-ink hover:bg-surface-muted",
         variant === "ghost" &&
           "bg-transparent text-ink hover:bg-black/5 dark:hover:bg-white/5",
         variant === "danger" &&

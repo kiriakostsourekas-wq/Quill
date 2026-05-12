@@ -6,31 +6,31 @@
   :root {
     color-scheme: light;
     --color-brand: 83 74 183;
-    --color-brand-light: 238 237 254;
-    --color-canvas: 249 249 249;
+    --color-brand-light: 244 244 245;
+    --color-canvas: 250 250 250;
     --color-ink: 26 26 26;
     --color-muted: 107 114 128;
     --color-line: 229 231 235;
     --color-surface: 255 255 255;
-    --color-surface-muted: 248 250 252;
-    --color-surface-soft: 241 245 249;
+    --color-surface-muted: 247 247 248;
+    --color-surface-soft: 244 244 245;
     --color-skeleton: 226 232 240;
-    --shadow-soft: 0 1px 2px rgba(17, 24, 39, 0.04);
+    --shadow-soft: 0 1px 1px rgba(17, 24, 39, 0.03);
   }
 
   .dark {
     color-scheme: dark;
     --color-brand: 144 132 255;
-    --color-brand-light: 52 48 94;
+    --color-brand-light: 39 39 42;
     --color-canvas: 10 14 22;
     --color-ink: 241 245 249;
     --color-muted: 148 163 184;
     --color-line: 43 53 72;
     --color-surface: 17 24 39;
-    --color-surface-muted: 22 31 48;
-    --color-surface-soft: 30 41 59;
+    --color-surface-muted: 24 31 42;
+    --color-surface-soft: 33 42 55;
     --color-skeleton: 51 65 85;
-    --shadow-soft: 0 16px 36px rgba(2, 6, 23, 0.28);
+    --shadow-soft: 0 1px 2px rgba(2, 6, 23, 0.2);
   }
 
   * {
@@ -85,7 +85,7 @@
 
 @layer components {
   .quill-card {
-    @apply rounded-xl border border-line bg-surface shadow-soft transition-colors duration-300;
+    @apply rounded-md border border-line bg-surface shadow-soft transition-colors duration-300;
   }
 
   .quill-input {

@@ -21,7 +21,6 @@ import { CalendarClient } from "@/components/app/calendar-client";
 import { KeyboardHint } from "@/components/app/keyboard-hint";
 import { IdeasClient } from "@/components/app/ideas-client";
 import { ScheduledClient } from "@/components/app/scheduled-client";
-import { VoiceDnaPanel } from "@/components/app/voice-dna-panel";
 import { VoiceScoreBadge } from "@/components/app/voice-score-badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -30,6 +29,7 @@ import {
   getVoiceProfileStrength,
   type VoiceProfileSampleSignal,
   type VoiceDimensions,
+  type VoiceProfileStrength,
 } from "@/lib/voice-foundations";
 import {
   AUTO_SCHEDULING_ENABLED,
@@ -83,6 +83,7 @@ const platformTabs: { label: string; value: PlatformMode }[] = [
 const writingModes: {
   value: WritingMode;
   label: string;
+  shortLabel: string;
   eyebrow: string;
   title: string;
   description: string;
@@ -93,6 +94,7 @@ const writingModes: {
   {
     value: "idea",
     label: "Start from an idea",
+    shortLabel: "Idea",
     eyebrow: "Workflow 1",
     title: "Turn a topic into a first draft in your voice",
     description:
@@ -104,6 +106,7 @@ const writingModes: {
   {
     value: "notes",
     label: "Rewrite rough notes",
+    shortLabel: "Notes",
     eyebrow: "Workflow 2",
     title: "Transform bullets into a polished post",
     description:
@@ -116,6 +119,7 @@ const writingModes: {
   {
     value: "draft",
     label: "Improve existing draft",
+    shortLabel: "Draft",
     eyebrow: "Workflow 3",
     title: "Refine a draft without sanding off your voice",
     description:
@@ -193,6 +197,192 @@ function buildHighlightMarkup(text: string, weakestSentence: string) {
   const after = escapeHtml(text.slice(range.end));
 
   return `${before}<mark class="rounded-sm bg-transparent decoration-amber-400/90 underline decoration-2 underline-offset-2">${target}</mark>${after}\n`;
+}
+
+function getProfileStrengthClasses(state?: VoiceProfileStrength["state"]) {
+  if (state === "weak") return "border-red-200 bg-red-50 text-red-700";
+  if (state === "forming") return "border-amber-200 bg-amber-50 text-amber-700";
+  return "border-emerald-200 bg-emerald-50 text-emerald-700";
+}
+
+function scoreValue(value?: number | null) {
+  return value == null ? "—" : `${value}%`;
+}
+
+function CompactVoiceDnaRail({
+  voice,
+  profileDimensions,
+  profileStrength,
+  loadingScore,
+  rewriteLoading,
+  animateScore,
+  canRefine,
+  onRewrite,
+  onApplySuggestion,
+}: {
+  voice: VoiceScore;
+  profileDimensions?: VoiceDimensions | null;
+  profileStrength?: VoiceProfileStrength | null;
+  loadingScore: boolean;
+  rewriteLoading: boolean;
+  animateScore: boolean;
+  canRefine: boolean;
+  onRewrite: () => void;
+  onApplySuggestion: (suggestion: string) => void;
+}) {
+  const hasVoiceProfile = Boolean(profileDimensions || profileStrength);
+  const profileLabel = profileStrength?.label ?? (hasVoiceProfile ? "Profile loaded" : null);
+  const metricRows = [
+    ["Tone", voice.toneScore],
+    ["Rhythm", voice.rhythmScore],
+    ["Word choice", voice.wordChoiceScore],
+  ] as const;
+
+  return (
+    <aside className="quill-card p-4 xl:sticky xl:top-24">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-brand">
+            Voice check
+          </p>
+          <h2 className="mt-1 text-lg font-semibold text-ink">Voice DNA</h2>
+        </div>
+        {profileLabel && (
+          <span
+            className={cn(
+              "shrink-0 rounded-full border px-2.5 py-1 text-xs font-medium",
+              getProfileStrengthClasses(profileStrength?.state)
+            )}
+          >
+            {profileLabel}
+          </span>
+        )}
+      </div>
+
+      {hasVoiceProfile ? (
+        <>
+          <div className="mt-4 space-y-3">
+            <VoiceScoreBadge
+              score={voice.score}
+              toneScore={voice.toneScore}
+              rhythmScore={voice.rhythmScore}
+              wordChoiceScore={voice.wordChoiceScore}
+              safeToPublish={voice.safeToPublish}
+              variant="pill"
+              animate={animateScore}
+              className="w-full justify-between"
+            />
+            <p className="text-sm leading-6 text-muted">
+              {loadingScore
+                ? "Checking the current draft against your voice..."
+                : voice.feedback}
+            </p>
+            {profileStrength?.note && (
+              <p className="text-xs leading-5 text-muted">{profileStrength.note}</p>
+            )}
+          </div>
+
+          <Button
+            className="mt-4 w-full"
+            onClick={onRewrite}
+            disabled={rewriteLoading || !canRefine}
+          >
+            {rewriteLoading ? "Refining..." : "Refine in my voice"}
+          </Button>
+
+          {voice.suggestions.length > 0 && (
+            <div className="mt-4 border-t border-line pt-4">
+              <div className="flex items-center justify-between gap-3">
+                <h3 className="text-sm font-semibold text-ink">Suggested edits</h3>
+                <span className="text-xs text-muted">{voice.suggestions.length}</span>
+              </div>
+              <div className="mt-3 space-y-2">
+                {voice.suggestions.slice(0, 2).map((suggestion, index) => (
+                  <div
+                    key={`${index}-${suggestion}`}
+                    className="rounded-lg border border-line bg-slate-50 px-3 py-3"
+                  >
+                    <p className="text-sm leading-5 text-muted">{suggestion}</p>
+                    <Button
+                      variant="outline"
+                      className="mt-3 h-8 px-3 text-xs"
+                      onClick={() => onApplySuggestion(suggestion)}
+                    >
+                      Apply
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <details className="mt-4 border-t border-line pt-4">
+            <summary className="cursor-pointer text-sm font-medium text-ink">
+              Details and traits
+            </summary>
+            <div className="mt-3 space-y-4 text-sm">
+              <div className="grid gap-2">
+                {metricRows.map(([label, value]) => (
+                  <div
+                    key={label}
+                    className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2"
+                  >
+                    <span className="text-muted">{label}</span>
+                    <span className="font-medium text-ink">{scoreValue(value)}</span>
+                  </div>
+                ))}
+              </div>
+
+              {voice.signaturePhrases.length > 0 && (
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">
+                    Signature phrases
+                  </p>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {voice.signaturePhrases.map((phrase) => (
+                      <span
+                        key={phrase}
+                        className="rounded-full border border-brand/15 bg-brand-light px-2.5 py-1 text-xs font-medium text-brand"
+                      >
+                        {phrase}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {profileDimensions && (
+                <div className="space-y-3">
+                  {[
+                    ["Hooks", profileDimensions.hookStyle],
+                    ["Paragraphs", profileDimensions.paragraphStyle],
+                    ["Story vs teaching", profileDimensions.storytellingVsTeaching],
+                    ["Language", profileDimensions.languageStyle],
+                  ].map(([label, value]) => (
+                    <div key={label}>
+                      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">
+                        {label}
+                      </p>
+                      <p className="mt-1 leading-6 text-ink">{value}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {voice.tip && <p className="leading-6 text-muted">{voice.tip}</p>}
+            </div>
+          </details>
+        </>
+      ) : (
+        <div className="mt-4 rounded-lg border border-dashed border-brand/30 bg-brand-light/40 p-4 text-sm leading-6 text-muted">
+          Set up Voice DNA first so Quill can generate, refine, and score drafts in your voice.{" "}
+          <Link href="/voice-dna" className="font-medium text-brand hover:underline">
+            Go to Voice DNA
+          </Link>
+        </div>
+      )}
+    </aside>
+  );
 }
 
 export function ComposeClient() {
@@ -479,8 +669,6 @@ export function ComposeClient() {
   const supportsFirstComment = selectedPlatforms.includes("linkedin");
   const profileStrength = voiceProfile ? getVoiceProfileStrength(voiceProfile) : null;
   const profileDimensions = voiceProfile ? getVoiceDimensions(voiceProfile) : null;
-  const showWorkflowGuide = !content.trim() && !loadingExistingPost && !loadPostError;
-
   const showVoiceProfile = Boolean(voice.traits && voice.traits.length > 0);
   const shouldHighlightWeakest =
     showVoiceProfile && Boolean(content.trim()) && Boolean(voice.weakestSentence.trim());
@@ -802,39 +990,34 @@ export function ComposeClient() {
 
   const scheduledWorkspaceContent = (
     <>
-      <div className="rounded-2xl border border-line bg-white p-4">
-        <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-          <div>
-            <h2 className="text-lg font-semibold text-ink">Scheduled workspace</h2>
-            <p className="mt-1 text-sm text-muted">
-              Manage drafts, scheduled posts, published posts, and calendar timing from Compose.
-            </p>
-          </div>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <p className="text-sm text-muted">
+          Manage drafts, scheduled posts, published posts, and calendar timing from Compose.
+        </p>
 
-          <div className="inline-flex rounded-full border border-line bg-surface p-1">
-            <button
-              type="button"
-              onClick={() => openComposeWorkspace("scheduled", "list")}
-              className={cn(
-                "inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition",
-                scheduledWorkspaceView === "list" ? "bg-brand text-white" : "text-muted"
-              )}
-            >
-              <CalendarRange className="h-4 w-4" />
-              Queue
-            </button>
-            <button
-              type="button"
-              onClick={() => openComposeWorkspace("scheduled", "calendar")}
-              className={cn(
-                "inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition",
-                scheduledWorkspaceView === "calendar" ? "bg-brand text-white" : "text-muted"
-              )}
-            >
-              <Calendar className="h-4 w-4" />
-              Calendar
-            </button>
-          </div>
+        <div className="inline-flex w-fit rounded-md border border-line bg-surface p-1">
+          <button
+            type="button"
+            onClick={() => openComposeWorkspace("scheduled", "list")}
+            className={cn(
+              "inline-flex items-center gap-2 rounded px-3 py-1.5 text-sm font-medium transition",
+              scheduledWorkspaceView === "list" ? "bg-brand text-white" : "text-muted"
+            )}
+          >
+            <CalendarRange className="h-4 w-4" />
+            Queue
+          </button>
+          <button
+            type="button"
+            onClick={() => openComposeWorkspace("scheduled", "calendar")}
+            className={cn(
+              "inline-flex items-center gap-2 rounded px-3 py-1.5 text-sm font-medium transition",
+              scheduledWorkspaceView === "calendar" ? "bg-brand text-white" : "text-muted"
+            )}
+          >
+            <Calendar className="h-4 w-4" />
+            Calendar
+          </button>
         </div>
       </div>
 
@@ -871,8 +1054,8 @@ export function ComposeClient() {
       </div>
     </div>
   ) : (
-    <div className="grid gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(320px,360px)] xl:items-start">
-      <div className="quill-card p-5 lg:p-6">
+    <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(300px,340px)] xl:items-start">
+      <div className="quill-card p-4 lg:p-5">
         {loadingExistingPost ? (
           <div className="flex min-h-[420px] flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-line bg-slate-50 text-center">
             <Loader2 className="h-6 w-6 animate-spin text-brand" />
@@ -928,112 +1111,10 @@ export function ComposeClient() {
               )}
             </div>
 
-            <div className="mt-3 rounded-xl border border-line bg-slate-50/80 px-4 py-3 text-sm leading-6 text-muted">
-              <span className="font-medium text-ink">Format support today:</span> this workspace is
-              for text posts on LinkedIn and X. LinkedIn first comments are supported. Use{" "}
-              <span className="font-medium text-ink">Carousel</span> for PDF/document posts. Native
-              image-only LinkedIn posts are not live yet.
-            </div>
-
-            <div className="mt-4 rounded-2xl border border-line bg-slate-50/80 p-4">
-              <div className="flex flex-wrap items-start justify-between gap-4">
-                <div className="max-w-2xl">
-                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand">
-                    Writing copilot
-                  </p>
-                  <h2 className="mt-2 text-xl font-semibold text-ink">Write in your voice faster</h2>
-                  <p className="mt-2 text-sm leading-6 text-muted">
-                    Pick a starting point, let Quill build the first pass in your voice, then use
-                    Voice DNA as a quick confidence check before you publish.
-                  </p>
-                </div>
-              </div>
-
-              <div className="mt-4 flex flex-wrap gap-2">
-                {writingModes.map((mode) => {
-                  const ModeIcon = mode.icon;
-                  return (
-                    <button
-                      key={mode.value}
-                      type="button"
-                      onClick={() => setWritingMode(mode.value)}
-                      className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition ${
-                        writingMode === mode.value
-                          ? "bg-brand text-white"
-                          : "border border-line bg-white text-muted hover:border-brand/20 hover:text-brand"
-                      }`}
-                    >
-                      <ModeIcon className="h-4 w-4" />
-                      {mode.label}
-                    </button>
-                  );
-                })}
-              </div>
-
-              <div className="mt-4 rounded-xl border border-line bg-white p-4">
-                <div className="flex items-start gap-3">
-                  <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-brand-light text-brand">
-                    <CurrentModeIcon className="h-5 w-5" />
-                  </span>
-                  <div className="flex-1">
-                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-brand">
-                      {currentWritingMode.eyebrow}
-                    </p>
-                    <h3 className="mt-1 text-lg font-semibold text-ink">
-                      {currentWritingMode.title}
-                    </h3>
-                    <p className="mt-2 text-sm leading-6 text-muted">
-                      {currentWritingMode.description}
-                    </p>
-                    {profileStrength && (
-                      <p className="mt-2 text-sm leading-6 text-muted">{profileStrength.note}</p>
-                    )}
-                  </div>
-                </div>
-
-                {writingMode !== "draft" ? (
-                  <div className="mt-4">
-                    <label className="block text-sm font-medium text-ink">
-                      {writingMode === "idea" ? "Idea or angle" : "Rough notes"}
-                    </label>
-                    <textarea
-                      value={modeInputValue}
-                      onChange={(event) =>
-                        writingMode === "idea"
-                          ? setIdeaInput(event.target.value)
-                          : setNotesInput(event.target.value)
-                      }
-                      className="quill-textarea mt-3 min-h-[112px] bg-slate-50"
-                      placeholder={currentWritingMode.placeholder}
-                    />
-                  </div>
-                ) : (
-                  <div className="mt-4 rounded-xl border border-dashed border-line bg-slate-50 px-4 py-4 text-sm leading-6 text-muted">
-                    Paste or shape your draft below, then let Quill tighten it in your voice without
-                    flattening the personality out of it.
-                  </div>
-                )}
-
-                <div className="mt-4 flex flex-wrap items-center gap-3">
-                  <Button
-                    onClick={() => {
-                      void runCopilot();
-                    }}
-                    disabled={copilotLoading || rewriteLoading || !canRunCopilot}
-                    className="gap-2"
-                  >
-                    {copilotLoading || rewriteLoading ? "Working..." : currentWritingMode.actionLabel}
-                  </Button>
-                  <p className="text-sm text-muted">
-                    {writingMode === "idea"
-                      ? "Start from a spark and let Quill build the first draft in your voice."
-                      : writingMode === "notes"
-                        ? "Turn rough thinking into a clean post before you start refining."
-                        : "Use Quill to tighten the draft, then use Voice DNA to pressure-test it."}
-                  </p>
-                </div>
-              </div>
-            </div>
+            <p className="mt-3 text-xs leading-5 text-muted">
+              Format support: text posts on LinkedIn and X, plus LinkedIn first comments. Use{" "}
+              <span className="font-medium text-ink">Carousel</span> for PDF/document posts.
+            </p>
 
             {showIdeaBanner && (
               <div className="mt-5 flex items-start justify-between gap-3 rounded-xl border border-brand/20 bg-brand-light/40 px-4 py-3 text-sm text-muted">
@@ -1049,7 +1130,7 @@ export function ComposeClient() {
               </div>
             )}
 
-            <div className="mt-5 overflow-hidden rounded-2xl border border-line bg-white">
+            <div className="mt-5 overflow-hidden rounded-md border border-line bg-white">
               <div className="flex flex-wrap items-start justify-between gap-4 border-b border-line px-4 py-4">
                 <div>
                   <p className="text-sm font-semibold text-ink">Working draft</p>
@@ -1080,7 +1161,7 @@ export function ComposeClient() {
                   <div
                     ref={highlightRef}
                     aria-hidden="true"
-                    className="pointer-events-none absolute inset-0 overflow-auto bg-white px-4 py-4 text-sm leading-6 text-ink"
+                    className="pointer-events-none absolute inset-0 overflow-auto bg-white px-4 py-4 text-base leading-7 text-ink"
                     dangerouslySetInnerHTML={{ __html: highlightMarkup }}
                   />
                 )}
@@ -1090,7 +1171,7 @@ export function ComposeClient() {
                   value={content}
                   onChange={(event) => setContent(event.target.value)}
                   onScroll={syncHighlightScroll}
-                  className={`quill-textarea min-h-[280px] rounded-none border-0 bg-transparent px-4 py-4 shadow-none ${
+                  className={`quill-textarea min-h-[420px] rounded-none border-0 bg-transparent px-4 py-4 text-base leading-7 shadow-none lg:min-h-[520px] ${
                     shouldHighlightWeakest ? "relative bg-transparent text-transparent" : ""
                   }`}
                   style={
@@ -1198,18 +1279,87 @@ export function ComposeClient() {
                 )}
               </div>
             </div>
+
+            <div className="mt-4 border-t border-line pt-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex min-w-0 items-center gap-3">
+                  <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-light text-brand">
+                    <CurrentModeIcon className="h-4 w-4" />
+                  </span>
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-brand">
+                      Writing copilot
+                    </p>
+                    <p className="truncate text-sm font-medium text-ink">
+                      {currentWritingMode.title}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="inline-flex rounded-md border border-line bg-white p-1">
+                  {writingModes.map((mode) => (
+                    <button
+                      key={mode.value}
+                      type="button"
+                      onClick={() => setWritingMode(mode.value)}
+                      className={cn(
+                        "rounded px-3 py-1.5 text-sm font-medium transition",
+                        writingMode === mode.value ? "bg-brand text-white" : "text-muted"
+                      )}
+                    >
+                      {mode.shortLabel}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="mt-3 grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
+                {writingMode !== "draft" ? (
+                  <label className="block">
+                    <span className="text-sm font-medium text-ink">
+                      {writingMode === "idea" ? "Idea or angle" : "Rough notes"}
+                    </span>
+                    <textarea
+                      value={modeInputValue}
+                      onChange={(event) =>
+                        writingMode === "idea"
+                          ? setIdeaInput(event.target.value)
+                          : setNotesInput(event.target.value)
+                      }
+                      className="quill-textarea mt-2 min-h-[96px] bg-white"
+                      placeholder={currentWritingMode.placeholder}
+                    />
+                  </label>
+                ) : (
+                  <div className="rounded-md border border-dashed border-line bg-white px-4 py-3 text-sm leading-6 text-muted">
+                    Uses the draft above as the prompt and tightens structure, phrasing, and clarity.
+                  </div>
+                )}
+
+                <Button
+                  onClick={() => {
+                    void runCopilot();
+                  }}
+                  disabled={copilotLoading || rewriteLoading || !canRunCopilot}
+                  className="gap-2 lg:w-[180px]"
+                >
+                  {copilotLoading || rewriteLoading ? "Working..." : currentWritingMode.actionLabel}
+                </Button>
+              </div>
+            </div>
           </>
         )}
       </div>
 
       {!loadingExistingPost && !loadPostError && (
-        <VoiceDnaPanel
+        <CompactVoiceDnaRail
           voice={voice}
           profileDimensions={profileDimensions}
           profileStrength={profileStrength}
           loadingScore={loadingScore}
           rewriteLoading={rewriteLoading}
           animateScore={animateScore}
+          canRefine={canSubmit}
           onRewrite={rewriteInVoice}
           onApplySuggestion={(suggestion) =>
             setContent((current) =>
@@ -1228,32 +1378,6 @@ export function ComposeClient() {
         scheduledWorkspaceContent
       ) : (
         <>
-          {showWorkflowGuide && (
-            <div className="rounded-2xl border border-line bg-white px-4 py-4">
-              <div className="flex flex-wrap items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-brand">
-                <span>How Quill works</span>
-                <span className="h-1 w-1 rounded-full bg-brand/40" />
-                <span className="normal-case tracking-normal text-muted">
-                  Set up your voice → generate → refine → publish
-                </span>
-              </div>
-              <div className="mt-4 grid gap-3 sm:grid-cols-4">
-                {[
-                  ["1", "Set up your voice", "Give Quill real samples or start from a foundation."],
-                  ["2", "Generate in your voice", "Start from an idea or rough notes instead of a blank page."],
-                  ["3", "Refine with Voice DNA", "Use the score and suggestions as a final quality check."],
-                  ["4", "Publish or schedule", "Post when it sounds right, not just when it scores high."],
-                ].map(([step, title, body]) => (
-                  <div key={step} className="rounded-xl border border-line bg-slate-50 px-4 py-3">
-                    <p className="text-xs font-semibold text-brand">{step}</p>
-                    <p className="mt-2 text-sm font-medium text-ink">{title}</p>
-                    <p className="mt-1 text-sm leading-6 text-muted">{body}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
           {composeWorkspaceContent}
           {!successState && <IdeasClient embedded />}
         </>
