@@ -28,6 +28,14 @@ type SubscriptionState = {
   message?: string;
 };
 
+const connectionErrorMessages: Record<string, string> = {
+  linkedin_not_configured:
+    "LinkedIn connection is not configured. Add the LinkedIn OAuth credentials and app URL before connecting.",
+  twitter_not_configured:
+    "X connection is not configured. Add the X OAuth credentials and app URL before connecting.",
+  account_limit: "Beta access currently includes LinkedIn and X for everyone.",
+};
+
 export function SettingsClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -108,9 +116,9 @@ export function SettingsClient() {
     const error = searchParams.get("error");
     if (!error) return;
 
-    if (error === "account_limit") {
-      toast.message("Beta access currently includes LinkedIn and X for everyone.");
-    }
+    const message = connectionErrorMessages[error] ?? "Unable to complete the account connection.";
+    if (error === "account_limit") toast.message(message);
+    else toast.error(message);
 
     const next = new URLSearchParams(searchParams.toString());
     next.delete("error");

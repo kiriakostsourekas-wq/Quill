@@ -13,10 +13,12 @@ import {
 } from "@/lib/twitter";
 
 export async function POST(request: NextRequest) {
+  let user: Awaited<ReturnType<typeof getRequestUser>> = null;
+
   try {
+    user = await getRequestUser(request);
     assertTwitterAuthConfig();
 
-    const user = await getRequestUser(request);
     if (user) {
       await assertFreePlanSocialAccountLimit(user, "twitter");
     }
@@ -41,9 +43,18 @@ export async function POST(request: NextRequest) {
         status: 303,
       });
     }
-    console.error("Twitter OAuth start failed", error);
-    return NextResponse.redirect(new URL("/login?error=twitter_not_configured", request.url), {
-      status: 303,
-    });
+    const message = error instanceof Error ? error.message : "Twitter OAuth is not configured";
+    if (message.includes("not configured")) {
+      console.warn(`Twitter OAuth unavailable: ${message}`);
+    } else {
+      console.error("Twitter OAuth start failed", error);
+    }
+    return NextResponse.redirect(
+      new URL(
+        user ? "/settings?error=twitter_not_configured" : "/login?error=twitter_not_configured",
+        request.url
+      ),
+      { status: 303 }
+    );
   }
 }
