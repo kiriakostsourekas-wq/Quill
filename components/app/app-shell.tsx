@@ -4,7 +4,12 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  BarChart3,
+  CalendarClock,
+  CalendarDays,
   Feather,
+  GalleryHorizontal,
+  LayoutDashboard,
   Lightbulb,
   LogOut,
   MenuSquare,
@@ -20,12 +25,15 @@ import { KeyboardHint } from "@/components/app/keyboard-hint";
 import { useTheme } from "@/components/app/theme-provider";
 import { cn } from "@/lib/utils";
 
-// Dashboard remains available as a direct route because it still contains
-// the publishing summary cards and recent-posts table that are not surfaced elsewhere.
 const navItems = [
+  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/compose", label: "Compose", icon: PenSquare },
+  { href: "/carousel", label: "Carousel", icon: GalleryHorizontal },
+  { href: "/scheduled", label: "Scheduled", icon: CalendarClock },
+  { href: "/calendar", label: "Calendar", icon: CalendarDays },
   { href: "/voice-dna", label: "Voice DNA", icon: Sparkles },
   { href: "/ideas", label: "Ideas", icon: Lightbulb },
+  { href: "/analytics", label: "Analytics", icon: BarChart3 },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 
@@ -212,7 +220,7 @@ export function AppShell({ user, children }: AppShellProps) {
     <div className="min-h-screen bg-canvas">
       <div className="flex min-h-screen">
         <aside className="hidden w-64 border-r border-line bg-surface px-4 py-5 lg:block">
-          <Link href="/compose" className="flex items-center gap-3 px-3">
+          <Link href="/dashboard" className="flex items-center gap-3 px-3">
             <div className="flex h-9 w-9 items-center justify-center rounded-lg border border-line bg-surface-muted text-ink">
               <Feather className="h-5 w-5" />
             </div>
@@ -340,6 +348,27 @@ export function AppShell({ user, children }: AppShellProps) {
                 </div>
               </div>
             </div>
+
+            <nav className="mt-3 flex gap-2 overflow-x-auto pb-1 lg:hidden" aria-label="Primary">
+              {navItems.map((item) => {
+                const Icon = item.icon;
+                const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
+
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className={cn(
+                      "inline-flex h-9 shrink-0 items-center gap-2 rounded-full border border-line bg-surface px-3 text-sm font-medium text-muted transition hover:bg-surface-muted hover:text-ink",
+                      active && "border-brand/25 bg-brand-light text-brand"
+                    )}
+                  >
+                    <Icon className="h-4 w-4" />
+                    {item.label}
+                  </Link>
+                );
+              })}
+            </nav>
           </header>
 
           {shouldShowConnectXBanner && (

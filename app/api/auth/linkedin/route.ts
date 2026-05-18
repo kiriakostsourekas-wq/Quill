@@ -29,14 +29,17 @@ async function getOAuthIntent(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  let user: Awaited<ReturnType<typeof getRequestUser>> = null;
+  let intent: Awaited<ReturnType<typeof getOAuthIntent>> = "connect";
+
   try {
+    user = await getRequestUser(request);
+    intent = await getOAuthIntent(request);
     assertLinkedInAuthConfig();
 
-    const user = await getRequestUser(request);
     if (user) {
       await assertFreePlanSocialAccountLimit(user, "linkedin");
     }
-    const intent = await getOAuthIntent(request);
     if (intent === "import" && !isLinkedInReadPostsEnabled()) {
       return NextResponse.redirect(
         new URL("/voice-dna/import?error=linkedin_import_disabled", request.url),
@@ -70,9 +73,18 @@ export async function POST(request: NextRequest) {
         status: 303,
       });
     }
-    console.error("LinkedIn OAuth start failed", error);
-    return NextResponse.redirect(new URL("/login?error=linkedin_not_configured", request.url), {
-      status: 303,
-    });
+    const message = error instanceof Error ? error.message : "LinkedIn OAuth is not configured";
+    if (message.includes("not configured")) {
+      console.warn(`LinkedIn OAuth unavailable: ${message}`);
+    } else {
+      console.error("LinkedIn OAuth start failed", error);
+    }
+    const destination =
+      intent === "import"
+        ? "/voice-dna/import?error=linkedin_not_configured"
+        : user
+          ? "/settings?error=linkedin_not_configured"
+          : "/login?error=linkedin_not_configured";
+    return NextResponse.redirect(new URL(destination, request.url), { status: 303 });
   }
 }

@@ -9,10 +9,10 @@ export default function UnsubscribePage() {
           You will no longer receive product update emails from Quill.
         </p>
         <Link
-          href="/dashboard"
+          href="/"
           className="mt-6 inline-flex rounded-lg border border-line px-4 py-2 text-sm font-medium text-ink transition hover:border-brand hover:text-brand"
         >
-          Back to dashboard
+          Back to Quill
         </Link>
       </div>
     </main>

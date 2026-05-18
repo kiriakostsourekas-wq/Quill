@@ -29,6 +29,19 @@ const planMocks = vi.hoisted(() => {
   };
 });
 
+const prismaMocks = vi.hoisted(() => ({
+  post: {
+    create: vi.fn(),
+    findFirst: vi.fn(),
+    update: vi.fn(),
+  },
+}));
+
+const voiceMocks = vi.hoisted(() => ({
+  scoreVoiceTextForUser: vi.fn(),
+  toStoredVoiceFields: vi.fn(() => ({})),
+}));
+
 vi.mock("@/lib/auth", () => ({
   getRequestUser: authMocks.getRequestUser,
   requireRequestUser: authMocks.requireRequestUser,
@@ -50,17 +63,13 @@ vi.mock("@/lib/plans", () => ({
 
 vi.mock("@/lib/prisma", () => ({
   prisma: {
-    post: {
-      create: vi.fn(),
-      findFirst: vi.fn(),
-      update: vi.fn(),
-    },
+    post: prismaMocks.post,
   },
 }));
 
 vi.mock("@/lib/voice-dna", () => ({
-  scoreVoiceTextForUser: vi.fn(),
-  toStoredVoiceFields: vi.fn(() => ({})),
+  scoreVoiceTextForUser: voiceMocks.scoreVoiceTextForUser,
+  toStoredVoiceFields: voiceMocks.toStoredVoiceFields,
 }));
 
 import { POST as publishPost } from "@/app/api/publish/route";
@@ -81,6 +90,9 @@ describe("publish route authorization", () => {
   beforeEach(() => {
     process.env.CRON_SECRET = "internal-secret";
     publishMocks.claimAndPublishPost.mockResolvedValue({ id: "post-1" });
+    publishMocks.syncPostDeliveries.mockResolvedValue(undefined);
+    voiceMocks.scoreVoiceTextForUser.mockResolvedValue({ result: {} });
+    voiceMocks.toStoredVoiceFields.mockReturnValue({});
   });
 
   it("rejects manual publish requests without a session", async () => {
@@ -151,5 +163,30 @@ describe("publish route authorization", () => {
     await expect(response.json()).resolves.toEqual({ error: "Unauthorized" });
     expect(response.status).toBe(401);
     expect(publishMocks.claimAndPublishPost).not.toHaveBeenCalled();
+  });
+
+  it("preserves internal line breaks in publish-now content", async () => {
+    const content = "Hook line.\n\nSecond paragraph.\n\nFinal line.";
+    authMocks.requireRequestUser.mockResolvedValue({ id: "user-1" });
+    prismaMocks.post.create.mockResolvedValue({ id: "post-1" });
+
+    const response = await publishNowPost(
+      jsonRequest("/api/publish/now", {
+        content,
+        platforms: ["linkedin"],
+      })
+    );
+
+    expect(response.status).toBe(200);
+    expect(prismaMocks.post.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        content,
+      }),
+    });
+    expect(publishMocks.claimAndPublishPost).toHaveBeenCalledWith(
+      "post-1",
+      "manual",
+      "user-1"
+    );
   });
 });

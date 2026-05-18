@@ -2,6 +2,7 @@ import { z } from "zod";
 import { NextRequest, NextResponse } from "next/server";
 import { requireRequestUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { getRecentPerformanceFeedbackPromptContext } from "@/lib/performance-feedback";
 import { generatePatternBasedVoiceText } from "@/lib/voice-dna";
 import { readRequestJson } from "@/lib/utils";
 
@@ -42,11 +43,25 @@ export async function POST(request: NextRequest) {
   }
 
   try {
+    const performanceContext = await getRecentPerformanceFeedbackPromptContext(user.id);
+    const performanceGuidance = performanceContext
+      ? ` Recent manual performance feedback:\n${performanceContext}\nUse these signals directionally when improving hooks, structure, specificity, and endings. Do not mention the metrics or feedback notes in the post.`
+      : "";
     const result = await generatePatternBasedVoiceText({
       profile,
-      systemPrompt:
-        "Rewrite this post so it sounds more like the voice profile. Pay attention to concrete habits like hook style, paragraph breaks, sentence length, directness, practical vs reflective orientation, and language density.",
-      userPrompt: `Post:\n${parsed.data.text}`,
+      systemPrompt: `Rewrite this post once so it sounds more like the voice profile, but do not chase a perfect match.
+
+Hard constraints:
+- Preserve the original meaning.
+- Do not add new claims, examples, stories, or advice.
+- Do not make the draft longer; keep the final draft within roughly 90-105% of the original length.
+- Keep the paragraph structure unless it is clearly hurting readability.
+- Improve hook style, sentence rhythm, directness, and language density only where it helps.
+- Return only the revised post text.${performanceGuidance}`,
+      userPrompt: `Original length: ${parsed.data.text.length} characters.
+
+Post:
+${parsed.data.text}`,
     });
     return new Response(result.text, {
       headers: {

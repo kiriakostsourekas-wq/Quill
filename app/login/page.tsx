@@ -62,14 +62,9 @@ export default async function LoginPage({
             Terms
           </Link>{" "}
           and{" "}
-          <a
-            className="text-brand hover:underline"
-            href="https://quill-ai.dev/privacy-policy"
-            target="_blank"
-            rel="noreferrer"
-          >
+          <Link className="text-brand hover:underline" href="/privacy-policy">
             Privacy Policy
-          </a>
+          </Link>
           .
         </p>
 
