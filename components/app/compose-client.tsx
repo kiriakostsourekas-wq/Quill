@@ -4,6 +4,7 @@ import Link from "next/link";
 import { format } from "date-fns";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  AlignLeft,
   Calendar,
   CalendarRange,
   Check,
@@ -19,11 +20,11 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { CalendarClient } from "@/components/app/calendar-client";
 import { KeyboardHint } from "@/components/app/keyboard-hint";
-import { IdeasClient } from "@/components/app/ideas-client";
 import { ScheduledClient } from "@/components/app/scheduled-client";
 import { VoiceScoreBadge } from "@/components/app/voice-score-badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { formatLinkedInPostSpacing } from "@/lib/post-formatting";
 import {
   getVoiceDimensions,
   getVoiceProfileStrength,
@@ -64,6 +65,7 @@ type PublishPlatform = "linkedin" | "twitter";
 type WritingMode = "idea" | "notes" | "draft";
 type ComposeWorkspaceMode = "compose" | "scheduled";
 type ScheduledWorkspaceView = "list" | "calendar";
+type DraftOutputTransform = (value: string) => string;
 type ComposeSuccessState =
   | {
       kind: "published";
@@ -196,7 +198,7 @@ function buildHighlightMarkup(text: string, weakestSentence: string) {
   const target = escapeHtml(text.slice(range.start, range.end));
   const after = escapeHtml(text.slice(range.end));
 
-  return `${before}<mark class="rounded-sm bg-transparent decoration-amber-400/90 underline decoration-2 underline-offset-2">${target}</mark>${after}\n`;
+  return `${before}<mark class="rounded-sm bg-amber-100/70 decoration-amber-500 underline decoration-[3px] underline-offset-4 dark:bg-amber-300/20 dark:decoration-amber-300">${target}</mark>${after}\n`;
 }
 
 function getProfileStrengthClasses(state?: VoiceProfileStrength["state"]) {
@@ -232,6 +234,7 @@ function CompactVoiceDnaRail({
 }) {
   const hasVoiceProfile = Boolean(profileDimensions || profileStrength);
   const profileLabel = profileStrength?.label ?? (hasVoiceProfile ? "Profile loaded" : null);
+  const canRunRefine = canRefine && !voice.safeToPublish;
   const metricRows = [
     ["Tone", voice.toneScore],
     ["Rhythm", voice.rhythmScore],
@@ -282,39 +285,43 @@ function CompactVoiceDnaRail({
             )}
           </div>
 
-          <Button
-            className="mt-4 w-full"
-            onClick={onRewrite}
-            disabled={rewriteLoading || !canRefine}
-          >
-            {rewriteLoading ? "Refining..." : "Refine in my voice"}
-          </Button>
+            <Button
+              className="mt-4 w-full"
+              onClick={onRewrite}
+              disabled={rewriteLoading || !canRunRefine}
+            >
+              {rewriteLoading
+                ? "Refining..."
+                : voice.safeToPublish
+                  ? "Voice match looks good"
+                  : "Refine in my voice"}
+            </Button>
 
-          {voice.suggestions.length > 0 && (
-            <div className="mt-4 border-t border-line pt-4">
-              <div className="flex items-center justify-between gap-3">
-                <h3 className="text-sm font-semibold text-ink">Suggested edits</h3>
-                <span className="text-xs text-muted">{voice.suggestions.length}</span>
-              </div>
-              <div className="mt-3 space-y-2">
-                {voice.suggestions.slice(0, 2).map((suggestion, index) => (
-                  <div
-                    key={`${index}-${suggestion}`}
-                    className="rounded-lg border border-line bg-slate-50 px-3 py-3"
-                  >
-                    <p className="text-sm leading-5 text-muted">{suggestion}</p>
-                    <Button
-                      variant="outline"
-                      className="mt-3 h-8 px-3 text-xs"
-                      onClick={() => onApplySuggestion(suggestion)}
+            {!voice.safeToPublish && voice.suggestions.length > 0 && (
+              <div className="mt-4 border-t border-line pt-4">
+                <div className="flex items-center justify-between gap-3">
+                  <h3 className="text-sm font-semibold text-ink">Suggested edits</h3>
+                  <span className="text-xs text-muted">{voice.suggestions.length}</span>
+                </div>
+                <div className="mt-3 space-y-2">
+                  {voice.suggestions.slice(0, 2).map((suggestion, index) => (
+                    <div
+                      key={`${index}-${suggestion}`}
+                      className="rounded-lg border border-line bg-slate-50 px-3 py-3"
                     >
-                      Apply
-                    </Button>
-                  </div>
-                ))}
+                      <p className="text-sm leading-5 text-muted">{suggestion}</p>
+                      <Button
+                        variant="outline"
+                        className="mt-3 h-8 px-3 text-xs"
+                        onClick={() => onApplySuggestion(suggestion)}
+                      >
+                        Apply
+                      </Button>
+                    </div>
+                  ))}
+                </div>
               </div>
-            </div>
-          )}
+            )}
 
           <details className="mt-4 border-t border-line pt-4">
             <summary className="cursor-pointer text-sm font-medium text-ink">
@@ -671,7 +678,10 @@ export function ComposeClient() {
   const profileDimensions = voiceProfile ? getVoiceDimensions(voiceProfile) : null;
   const showVoiceProfile = Boolean(voice.traits && voice.traits.length > 0);
   const shouldHighlightWeakest =
-    showVoiceProfile && Boolean(content.trim()) && Boolean(voice.weakestSentence.trim());
+    showVoiceProfile &&
+    Boolean(content.trim()) &&
+    !voice.safeToPublish &&
+    Boolean(voice.weakestSentence.trim());
   const canSubmit = Boolean(content.trim()) && !loadingExistingPost && !loadPostError;
   const canRunCopilot =
     writingMode === "draft" ? canSubmit : Boolean(modeInputValue.trim()) && !loadingExistingPost && !loadPostError;
@@ -763,7 +773,8 @@ export function ComposeClient() {
     async (
       endpoint: string,
       payload: Record<string, string>,
-      fallbackMessage: string
+      fallbackMessage: string,
+      transformOutput?: DraftOutputTransform
     ) => {
       const response = await fetch(endpoint, {
         method: "POST",
@@ -790,24 +801,54 @@ export function ComposeClient() {
         output += decoder.decode(value, { stream: true });
         setContent(output);
       }
+
+      if (transformOutput) {
+        setContent(transformOutput(output));
+      }
     },
     [readResponseError]
   );
 
+  const formatGeneratedDraft = useCallback(
+    (value: string) => {
+      if (platform === "twitter") return value;
+      return formatLinkedInPostSpacing(value);
+    },
+    [platform]
+  );
+
+  const formatCurrentDraftSpacing = useCallback(() => {
+    const formatted = formatLinkedInPostSpacing(content);
+    if (!formatted) return;
+
+    setContent(formatted);
+    if (formatted === content) {
+      toast.message("Spacing already looks clean.");
+      return;
+    }
+    toast.success("Spacing formatted.");
+  }, [content]);
+
   const rewriteInVoice = useCallback(async () => {
+    if (voice.safeToPublish) {
+      toast.message("Voice match already looks good. Edit manually for taste.");
+      return;
+    }
+
     setRewriteLoading(true);
     try {
       await streamDraftIntoEditor(
         "/api/voice/rewrite",
         { text: content },
-        "Unable to rewrite post"
+        "Unable to rewrite post",
+        formatGeneratedDraft
       );
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Unable to rewrite post");
     } finally {
       setRewriteLoading(false);
     }
-  }, [content, streamDraftIntoEditor]);
+  }, [content, formatGeneratedDraft, streamDraftIntoEditor, voice.safeToPublish]);
 
   const runCopilot = useCallback(async () => {
     if (!canRunCopilot) return;
@@ -826,7 +867,8 @@ export function ComposeClient() {
           input: modeInputValue,
           platform,
         },
-        "Unable to generate in your voice right now"
+        "Unable to generate in your voice right now",
+        formatGeneratedDraft
       );
     } catch (error) {
       toast.error(
@@ -835,7 +877,15 @@ export function ComposeClient() {
     } finally {
       setCopilotLoading(false);
     }
-  }, [canRunCopilot, modeInputValue, platform, rewriteInVoice, streamDraftIntoEditor, writingMode]);
+  }, [
+    canRunCopilot,
+    formatGeneratedDraft,
+    modeInputValue,
+    platform,
+    rewriteInVoice,
+    streamDraftIntoEditor,
+    writingMode,
+  ]);
 
   const saveOrUpdatePost = useCallback(async (payload: {
     content: string;
@@ -1158,12 +1208,12 @@ export function ComposeClient() {
 
               <div className="relative">
                 {shouldHighlightWeakest && (
-                  <div
-                    ref={highlightRef}
-                    aria-hidden="true"
-                    className="pointer-events-none absolute inset-0 overflow-auto bg-white px-4 py-4 text-base leading-7 text-ink"
-                    dangerouslySetInnerHTML={{ __html: highlightMarkup }}
-                  />
+                    <div
+                      ref={highlightRef}
+                      aria-hidden="true"
+                      className="pointer-events-none absolute inset-0 overflow-auto bg-surface px-4 py-4 text-base leading-7 text-ink"
+                      dangerouslySetInnerHTML={{ __html: highlightMarkup }}
+                    />
                 )}
 
                 <textarea
@@ -1176,10 +1226,10 @@ export function ComposeClient() {
                   }`}
                   style={
                     shouldHighlightWeakest
-                      ? {
-                          caretColor: "#1A1A1A",
-                          WebkitTextFillColor: "transparent",
-                        }
+                        ? {
+                            caretColor: "rgb(var(--color-ink))",
+                            WebkitTextFillColor: "transparent",
+                          }
                       : undefined
                   }
                   placeholder={editorPlaceholder}
@@ -1228,6 +1278,15 @@ export function ComposeClient() {
                   >
                     <span>{saving ? "Saving..." : "Save draft"}</span>
                     {!saving && <KeyboardHint keys={`${shortcutModifier}S`} />}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={formatCurrentDraftSpacing}
+                    disabled={!content.trim()}
+                    className="gap-2"
+                  >
+                    <AlignLeft className="h-4 w-4" />
+                    Format spacing
                   </Button>
                   <Button
                     onClick={() => setScheduleOpen(true)}
@@ -1377,10 +1436,7 @@ export function ComposeClient() {
       {activeWorkspace === "scheduled" ? (
         scheduledWorkspaceContent
       ) : (
-        <>
-          {composeWorkspaceContent}
-          {!successState && <IdeasClient embedded />}
-        </>
+        composeWorkspaceContent
       )}
     </section>
   );

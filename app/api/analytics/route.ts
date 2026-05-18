@@ -25,6 +25,34 @@ export async function GET(request: NextRequest) {
       publishedAt: "asc",
     },
   });
+  const feedbackCounts = await prisma.postPerformanceFeedback.groupBy({
+    by: ["outcome"],
+    where: { userId: user.id },
+    _count: { _all: true },
+  });
+  const recentFeedback = await prisma.postPerformanceFeedback.findMany({
+    where: { userId: user.id },
+    orderBy: { updatedAt: "desc" },
+    take: 6,
+    select: {
+      id: true,
+      postId: true,
+      outcome: true,
+      likes: true,
+      comments: true,
+      reposts: true,
+      impressions: true,
+      notes: true,
+      updatedAt: true,
+      post: {
+        select: {
+          postType: true,
+          content: true,
+          documentTitle: true,
+        },
+      },
+    },
+  });
 
   const publishedByPost = new Map<string, Date>();
   let linkedinCount = 0;
@@ -87,5 +115,20 @@ export async function GET(request: NextRequest) {
           ? "LinkedIn"
           : "X",
     chart,
+    performanceFeedback: {
+      totalLogged: feedbackCounts.reduce((sum, entry) => sum + entry._count._all, 0),
+      counts: feedbackCounts.reduce(
+        (acc, entry) => ({
+          ...acc,
+          [entry.outcome]: entry._count._all,
+        }),
+        {
+          underperformed: 0,
+          expected: 0,
+          outperformed: 0,
+        }
+      ),
+      recent: recentFeedback,
+    },
   });
 }

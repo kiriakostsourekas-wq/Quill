@@ -410,18 +410,18 @@ export async function scoreVoiceText(
   const profileStrength = getVoiceProfileStrength(profile);
   const safePublishThresholds =
     profileStrength.state === "weak"
-      ? { score: 82, floor: 72 }
+      ? { score: 78, floor: 64 }
       : profileStrength.state === "forming"
-        ? { score: 78, floor: 68 }
-        : { score: 74, floor: 65 };
+        ? { score: 76, floor: 64 }
+        : { score: 74, floor: 62 };
   const completion = await groq.chat.completions.create({
     model: "llama-3.3-70b-versatile",
     response_format: { type: "json_object" },
     messages: [
       {
-        role: "system",
-        content:
-          "Score this text 0-100 against this voice profile. Return ONLY valid JSON: { score: number, toneScore: number, rhythmScore: number, wordChoiceScore: number, feedback: string, tip: string, safeToPublish: boolean, weakestSentence: string, suggestions: string[] }. Tone score measures whether the opening, posture, and overall feel match the user's established patterns. Rhythm score measures sentence length and paragraph flow. WordChoiceScore measures vocabulary, specificity, and phrasing. Feedback and tip must reference concrete writing habits from the profile, not vague adjectives. Respect the profile-strength signal when judging confidence: weak profiles have limited signal so scores should reflect uncertainty, not penalize the content itself. Also identify the single weakest sentence and provide 3 specific, actionable suggestions to make this post sound more like the user. Each suggestion should be one concrete sentence starting with an action verb, preserve the same core meaning, and reflect a recognizable voice pattern such as stronger claim-led hooks, shorter paragraphs, more practical language, less hedging, or clearer teaching structure.",
+          role: "system",
+          content:
+            "Score this text 0-100 against this voice profile. Return ONLY valid JSON: { score: number, toneScore: number, rhythmScore: number, wordChoiceScore: number, feedback: string, tip: string, safeToPublish: boolean, weakestSentence: string, suggestions: string[] }. Tone score measures whether the opening, posture, and overall feel match the user's established patterns. Rhythm score measures sentence length and paragraph flow. WordChoiceScore measures vocabulary, specificity, and phrasing. Feedback and tip must reference concrete writing habits from the profile, not vague adjectives. Respect the profile-strength signal when judging confidence: weak profiles have limited signal so scores should reflect uncertainty, not penalize the content itself. Do not optimize for a 100% match; publishable means similar enough while still being fresh writing, not identical to the user's samples. If the draft is publishable, say so and keep suggestions minimal. If it is not publishable, identify the single weakest sentence and provide 3 specific, actionable suggestions to make this post sound more like the user. Each suggestion should be one concrete sentence starting with an action verb, preserve the same core meaning, and reflect a recognizable voice pattern such as stronger claim-led hooks, shorter paragraphs, more practical language, less hedging, or clearer teaching structure.",
       },
       {
         role: "user",
@@ -434,8 +434,6 @@ export async function scoreVoiceText(
 
   const content = getMessageText(completion.choices[0]?.message?.content);
   const raw = parseJsonObject<GroqScoreResult>(content);
-  const weakestSentence = pickWeakestSentence(text, raw.weakestSentence);
-  const suggestions = normalizeSuggestions(raw.suggestions, profile, weakestSentence);
   const score = clampScore(raw.score, 0);
   const toneScore = clampScore(raw.toneScore, score + 2);
   const rhythmScore = clampScore(raw.rhythmScore, score - 2);
@@ -448,6 +446,14 @@ export async function scoreVoiceText(
     raw.feedback?.trim() || "This draft needs a stronger match to your Voice DNA.";
   const baseTip =
     raw.tip?.trim() || "Use a more natural sentence rhythm and phrasing that sounds like you.";
+  const weakestSentence = safeToPublish ? "" : pickWeakestSentence(text, raw.weakestSentence);
+  const suggestions = safeToPublish
+    ? []
+    : normalizeSuggestions(raw.suggestions, profile, weakestSentence);
+  const readyFeedback =
+    "This is close enough to your Voice DNA. Edit for taste, not voice match.";
+  const readyTip =
+    "No refinement needed unless you want to change the idea, emphasis, or examples.";
   const cautiousPrefix =
     profileStrength.state === "weak"
       ? "Voice profile is still weak, so treat this score as directional rather than definitive."
@@ -460,9 +466,17 @@ export async function scoreVoiceText(
     toneScore,
     rhythmScore,
     wordChoiceScore,
-    feedback: cautiousPrefix ? `${cautiousPrefix} ${baseFeedback}` : baseFeedback,
+    feedback: safeToPublish
+      ? cautiousPrefix
+        ? `${cautiousPrefix} ${readyFeedback}`
+        : readyFeedback
+      : cautiousPrefix
+        ? `${cautiousPrefix} ${baseFeedback}`
+        : baseFeedback,
     tip:
-      profileStrength.state === "weak"
+      safeToPublish
+        ? readyTip
+        : profileStrength.state === "weak"
         ? `${baseTip} Add more authentic samples if you want a stronger Voice DNA check.`
         : baseTip,
     signaturePhrases,

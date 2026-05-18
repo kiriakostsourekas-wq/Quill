@@ -194,6 +194,37 @@ describe("Voice DNA helpers", () => {
     }
   });
 
+  it("stops suggesting edits when a draft is close enough to publish", async () => {
+    const mock = mockGroqResponses([
+      JSON.stringify({
+        score: 82,
+        toneScore: 81,
+        rhythmScore: 80,
+        wordChoiceScore: 83,
+        feedback: "This is strong but could still be closer.",
+        tip: "Tweak the hook.",
+        weakestSentence: "This sentence could be better.",
+        suggestions: ["Rewrite the hook again.", "Make it more specific.", "Use shorter lines."],
+        safeToPublish: false,
+      }),
+    ]);
+
+    try {
+      const result = await scoreVoiceText(
+        makeProfile(),
+        "Useful writing starts with a concrete claim. Then it earns trust with a specific example."
+      );
+
+      expect(result.safeToPublish).toBe(true);
+      expect(result.weakestSentence).toBe("");
+      expect(result.suggestions).toEqual([]);
+      expect(result.feedback).toMatch(/close enough to your Voice DNA/i);
+      expect(result.tip).toMatch(/No refinement needed/i);
+    } finally {
+      mock.restore();
+    }
+  });
+
   it("clamps scores and fills weakest sentence and suggestion fallbacks", async () => {
     const mock = mockGroqResponses([
       `Model output:\n${JSON.stringify({

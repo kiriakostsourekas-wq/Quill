@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import {
   Bar,
@@ -12,8 +13,32 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { TrendingDown, TrendingUp } from "lucide-react";
+import { ClipboardCheck, TrendingDown, TrendingUp } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { VoiceScoreBadge, getVoiceScoreTone } from "@/components/app/voice-score-badge";
+
+type PerformanceOutcome = "underperformed" | "expected" | "outperformed";
+
+type PerformanceFeedbackSummary = {
+  totalLogged: number;
+  counts: Record<PerformanceOutcome, number>;
+  recent: Array<{
+    id: string;
+    postId: string;
+    outcome: PerformanceOutcome;
+    likes?: number | null;
+    comments?: number | null;
+    reposts?: number | null;
+    impressions?: number | null;
+    notes?: string | null;
+    updatedAt: string;
+    post: {
+      postType: string;
+      content: string;
+      documentTitle?: string | null;
+    };
+  }>;
+};
 
 type AnalyticsState = {
   totalPublished: number;
@@ -21,6 +46,7 @@ type AnalyticsState = {
   publishedThisWeek: number;
   topPlatform: string | null;
   chart: Array<{ date: string; count: number }>;
+  performanceFeedback?: PerformanceFeedbackSummary;
 };
 
 type VoicePostPreview = {
@@ -97,6 +123,20 @@ function PostScoreList({
   );
 }
 
+function getPerformanceOutcomeLabel(outcome: PerformanceOutcome) {
+  if (outcome === "underperformed") return "Underperformed";
+  if (outcome === "outperformed") return "Outperformed";
+  return "Expected";
+}
+
+function getFeedbackPostLabel(feedback: PerformanceFeedbackSummary["recent"][number]) {
+  if (feedback.post.postType === "carousel") {
+    return feedback.post.documentTitle ?? "LinkedIn carousel";
+  }
+
+  return feedback.post.content;
+}
+
 export function AnalyticsClient({ embedded = false }: { embedded?: boolean }) {
   const [analytics, setAnalytics] = useState<AnalyticsState | null>(null);
   const [voiceReport, setVoiceReport] = useState<VoiceReportState | null>(null);
@@ -161,6 +201,72 @@ export function AnalyticsClient({ embedded = false }: { embedded?: boolean }) {
             <p className="mt-3 text-3xl font-semibold text-ink">{metric.value}</p>
           </div>
         ))}
+      </div>
+
+      <div className="quill-card p-6">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <div className="flex items-center gap-2">
+              <ClipboardCheck className="h-4 w-4 text-brand" />
+              <h2 className="text-lg font-semibold text-ink">Performance feedback</h2>
+            </div>
+            <p className="mt-1 text-sm text-muted">
+              Manual outcomes logged after publishing.
+            </p>
+          </div>
+          <Link href="/scheduled">
+            <Button variant="outline" className="gap-2">
+              <ClipboardCheck className="h-4 w-4" />
+              Log from published posts
+            </Button>
+          </Link>
+        </div>
+
+        <div className="mt-5 grid gap-3 md:grid-cols-4">
+          <div className="rounded-xl border border-line p-4">
+            <p className="text-sm text-muted">Logged</p>
+            <p className="mt-2 text-2xl font-semibold text-ink">
+              {analytics?.performanceFeedback?.totalLogged ?? 0}
+            </p>
+          </div>
+          {(["underperformed", "expected", "outperformed"] as const).map((outcome) => (
+            <div key={outcome} className="rounded-xl border border-line p-4">
+              <p className="text-sm text-muted">{getPerformanceOutcomeLabel(outcome)}</p>
+              <p className="mt-2 text-2xl font-semibold text-ink">
+                {analytics?.performanceFeedback?.counts[outcome] ?? 0}
+              </p>
+            </div>
+          ))}
+        </div>
+
+        <div className="mt-5 space-y-3">
+          {(analytics?.performanceFeedback?.recent ?? []).length === 0 ? (
+            <div className="rounded-xl border border-dashed border-line px-4 py-6 text-center text-sm text-muted">
+              No performance feedback logged yet.
+            </div>
+          ) : (
+            analytics?.performanceFeedback?.recent.map((feedback) => (
+              <div key={feedback.id} className="rounded-xl border border-line p-4">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="rounded-full bg-brand-light px-2.5 py-1 text-xs font-semibold text-brand">
+                    {getPerformanceOutcomeLabel(feedback.outcome)}
+                  </span>
+                  <span className="text-xs text-muted">
+                    {new Date(feedback.updatedAt).toLocaleDateString()}
+                  </span>
+                </div>
+                <p className="mt-3 line-clamp-2 text-sm leading-6 text-ink">
+                  {getFeedbackPostLabel(feedback)}
+                </p>
+                {feedback.notes && (
+                  <p className="mt-2 line-clamp-2 text-sm leading-6 text-muted">
+                    {feedback.notes}
+                  </p>
+                )}
+              </div>
+            ))
+          )}
+        </div>
       </div>
 
       <div className="quill-card p-6">

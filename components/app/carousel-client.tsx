@@ -66,6 +66,12 @@ type CarouselPostRecord = {
   carouselSlides?: CarouselSlide[] | null;
 };
 
+type GeneratedCarouselResponse = {
+  title?: string;
+  slides?: CarouselSlide[];
+  error?: string;
+};
+
 type UploadPreviewItem =
   | { kind: "image"; label: string; src: string }
   | { kind: "pdf"; label: string };
@@ -145,6 +151,9 @@ export function CarouselClient() {
   const [voice, setVoice] = useState<VoiceScore>(emptyVoiceState);
   const [loadingExistingPost, setLoadingExistingPost] = useState(Boolean(postId));
   const [loadPostError, setLoadPostError] = useState<string | null>(null);
+  const [generationSource, setGenerationSource] = useState("");
+  const [generationSlideCount, setGenerationSlideCount] = useState(DEFAULT_CAROUSEL_SLIDES);
+  const [generatingSlides, setGeneratingSlides] = useState(false);
 
   const scorableText = useMemo(
     () => (mode === "builder" ? buildCarouselContent(slides) : voiceText.trim()),
@@ -373,6 +382,59 @@ export function CarouselClient() {
     }
   }
 
+  async function generateSlidesFromDraft() {
+    const sourceText = generationSource.trim();
+    if (!sourceText) {
+      toast.error("Paste a draft first.");
+      return;
+    }
+
+    setGeneratingSlides(true);
+    try {
+      const slideCount = Math.min(
+        MAX_CAROUSEL_SLIDES,
+        Math.max(MIN_CAROUSEL_SLIDES, generationSlideCount)
+      );
+      const response = await fetch("/api/carousel/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sourceText, slideCount }),
+      });
+      const data = (await response.json().catch(() => ({}))) as GeneratedCarouselResponse;
+
+      if (!response.ok) {
+        throw new Error(data.error ?? "Unable to generate carousel slides");
+      }
+
+      const generatedSlides = (data.slides ?? [])
+        .slice(0, MAX_CAROUSEL_SLIDES)
+        .map((slide) => ({
+          headline: (slide.headline ?? "").slice(0, MAX_CAROUSEL_HEADLINE),
+          body: (slide.body ?? "").slice(0, MAX_CAROUSEL_BODY),
+          background: getCarouselBackgroundPreset(slide.background ?? "white").key,
+          imageDataUrl: null,
+        }))
+        .filter((slide) => slide.headline.trim()) as CarouselSlide[];
+
+      if (generatedSlides.length < MIN_CAROUSEL_SLIDES) {
+        throw new Error("Generated slides were incomplete. Try a more detailed draft.");
+      }
+
+      setMode("builder");
+      setTitle((data.title ?? "Quill carousel").slice(0, MAX_CAROUSEL_TITLE));
+      setSlides(generatedSlides);
+      setActiveSlideIndex(0);
+      setVoiceText("");
+      setPdfBase64(null);
+      setUploadPreviewItems([]);
+      toast.success("Carousel slides generated.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Unable to generate carousel slides");
+    } finally {
+      setGeneratingSlides(false);
+    }
+  }
+
   async function saveDraft() {
     setSaving(true);
     try {
@@ -532,18 +594,67 @@ export function CarouselClient() {
               >
                 Build slides
               </button>
-              <button
-                type="button"
-                onClick={() => setMode("upload")}
-                className={`rounded-full px-4 py-2 text-sm font-medium ${
-                  mode === "upload" ? "bg-brand text-white" : "border border-line bg-white text-muted"
-                }`}
-              >
-                Upload PDF or images
-              </button>
-            </div>
+                <button
+                  type="button"
+                  onClick={() => setMode("upload")}
+                  className={`rounded-full px-4 py-2 text-sm font-medium ${
+                    mode === "upload" ? "bg-brand text-white" : "border border-line bg-white text-muted"
+                  }`}
+                >
+                  Upload PDF or images
+                </button>
+              </div>
 
-            <div className="mt-5">
+              <div className="mt-5 rounded-md border border-line bg-slate-50 p-4">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="h-4 w-4 text-brand" />
+                  <p className="text-sm font-semibold text-ink">Generate slides from draft</p>
+                </div>
+                <textarea
+                  value={generationSource}
+                  onChange={(event) => setGenerationSource(event.target.value)}
+                  className="quill-textarea mt-3 min-h-[112px] bg-white"
+                  placeholder="Paste a LinkedIn draft or outline..."
+                />
+                <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-end">
+                  <div className="w-full sm:w-28">
+                    <label className="text-sm font-medium text-ink">Slides</label>
+                    <input
+                      type="number"
+                      min={MIN_CAROUSEL_SLIDES}
+                      max={MAX_CAROUSEL_SLIDES}
+                      value={generationSlideCount}
+                      onChange={(event) => {
+                        const nextValue = Number(event.target.value);
+                        if (Number.isNaN(nextValue)) return;
+                        setGenerationSlideCount(
+                          Math.min(
+                            MAX_CAROUSEL_SLIDES,
+                            Math.max(MIN_CAROUSEL_SLIDES, nextValue)
+                          )
+                        );
+                      }}
+                      className="quill-input mt-2 bg-white"
+                    />
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="gap-2"
+                    onClick={generateSlidesFromDraft}
+                    disabled={generatingSlides || !generationSource.trim()}
+                  >
+                    {generatingSlides ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Sparkles className="h-4 w-4" />
+                    )}
+                    {generatingSlides ? "Generating..." : "Generate slides"}
+                  </Button>
+                </div>
+              </div>
+
+              <div className="mt-5">
               <label className="text-sm font-medium text-ink">Title</label>
               <input
                 value={title}
@@ -568,10 +679,12 @@ export function CarouselClient() {
                     />
                     Cover slide
                   </label>
-                  <span className="text-xs text-muted">{slides.length} / {MAX_CAROUSEL_SLIDES} slides</span>
+                  <span className="text-xs text-muted">
+                    {slides.length} / {MAX_CAROUSEL_SLIDES} slides
+                  </span>
                 </div>
 
-                <div className="mt-4 grid gap-3">
+                  <div className="mt-4 grid gap-3">
                   {slides.map((slide, index) => (
                     <button
                       key={`carousel-slide-row-${index}`}

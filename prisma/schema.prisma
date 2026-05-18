@@ -29,6 +29,7 @@ model User {
   posts                 Post[]
   savedIdeas            SavedIdea[]
   voiceProfile          VoiceProfile?
+  performanceFeedback   PostPerformanceFeedback[]
 }
 
 model SocialAccount {
@@ -78,8 +79,28 @@ model Post {
   user                 User                @relation(fields: [userId], references: [id], onDelete: Cascade)
   deliveries           PostDelivery[]
   publishAttempts      PostPublishAttempt[]
+  performanceFeedback  PostPerformanceFeedback?
 
   @@index([status, scheduledAt])
+}
+
+model PostPerformanceFeedback {
+  id          String   @id @default(cuid())
+  postId      String   @unique
+  userId      String
+  outcome     String
+  likes       Int?
+  comments    Int?
+  reposts     Int?
+  impressions Int?
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  post        Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, updatedAt])
+  @@index([userId, outcome])
 }
 
 model PostDelivery {

@@ -125,10 +125,23 @@ export async function GET(request: NextRequest) {
         errorLog: true,
         voiceScore: true,
         voiceToneScore: true,
-        voiceRhythmScore: true,
-        voiceWordChoiceScore: true,
-        voiceSafeToPublish: true,
-        deliveries: {
+	        voiceRhythmScore: true,
+	        voiceWordChoiceScore: true,
+	        voiceSafeToPublish: true,
+	        performanceFeedback: {
+	          select: {
+	            id: true,
+	            outcome: true,
+	            likes: true,
+	            comments: true,
+	            reposts: true,
+	            impressions: true,
+	            notes: true,
+	            createdAt: true,
+	            updatedAt: true,
+	          },
+	        },
+	        deliveries: {
           orderBy: { platform: "asc" },
           select: {
             platform: true,
