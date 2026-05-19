@@ -11,6 +11,7 @@ type PerformanceFeedbackPromptRecord = {
     postType: string;
     content: string;
     documentTitle: string | null;
+    carouselTemplateId: string | null;
   };
 };
 
@@ -36,9 +37,13 @@ function formatRecord(record: PerformanceFeedbackPromptRecord) {
     record.post.postType === "carousel" && record.post.documentTitle
       ? record.post.documentTitle
       : truncateForPrompt(record.post.content, 140);
+  const template =
+    record.post.postType === "carousel" && record.post.carouselTemplateId
+      ? ` [carousel template: ${record.post.carouselTemplateId}]`
+      : "";
   const notes = record.notes ? ` Notes: ${truncateForPrompt(record.notes, 160)}` : "";
 
-  return `- ${title}${formatMetrics(record)}.${notes}`;
+  return `- ${title}${template}${formatMetrics(record)}.${notes}`;
 }
 
 export function buildPerformanceFeedbackPromptContext(
@@ -64,7 +69,14 @@ export function buildPerformanceFeedbackPromptContext(
 
 export async function getRecentPerformanceFeedbackPromptContext(userId: string) {
   const records = await prisma.postPerformanceFeedback.findMany({
-    where: { userId },
+    where: {
+      userId,
+      post: {
+        platforms: {
+          has: "linkedin",
+        },
+      },
+    },
     orderBy: { updatedAt: "desc" },
     take: 12,
     select: {
@@ -79,6 +91,7 @@ export async function getRecentPerformanceFeedbackPromptContext(userId: string) 
           postType: true,
           content: true,
           documentTitle: true,
+          carouselTemplateId: true,
         },
       },
     },

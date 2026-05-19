@@ -25,18 +25,39 @@ import { Button } from "@/components/ui/button";
 import {
   buildCarouselContent,
   CAROUSEL_BACKGROUND_PRESETS,
+  CAROUSEL_GENERATION_STYLES,
+  CAROUSEL_SLIDE_ROLES,
+  CAROUSEL_TEMPLATES,
+  CAROUSEL_THEMES,
   createEmptySlide,
   createInitialSlides,
+  DEFAULT_CAROUSEL_TEMPLATE_ID,
+  DEFAULT_CAROUSEL_THEME_ID,
   DEFAULT_CAROUSEL_SLIDES,
   getCarouselBackgroundPreset,
-  getCarouselTextColor,
+  getCarouselTemplate,
+  getCarouselTemplateVisuals,
+  getCarouselTheme,
   MAX_CAROUSEL_BODY,
+  MAX_CAROUSEL_BULLET,
+  MAX_CAROUSEL_BULLETS,
+  MAX_CAROUSEL_EMPHASIS,
   MAX_CAROUSEL_HEADLINE,
+  MAX_CAROUSEL_KICKER,
   MAX_CAROUSEL_SLIDES,
   MAX_CAROUSEL_TITLE,
   MIN_CAROUSEL_SLIDES,
+  normalizeCarouselGenerationStyle,
+  normalizeCarouselSlides,
+  normalizeCarouselTemplateId,
+  normalizeCarouselThemeId,
+  resolveCarouselSlideRole,
+  type CarouselGenerationStyle,
   type CarouselMode,
   type CarouselSlide,
+  type CarouselSlideRole,
+  type CarouselTemplateId,
+  type CarouselThemeId,
 } from "@/lib/carousel";
 import {
   base64ToPdfBytes,
@@ -62,12 +83,17 @@ type CarouselPostRecord = {
   documentTitle?: string | null;
   coverSlide?: boolean;
   carouselMode?: CarouselMode | null;
+  carouselTemplateId?: CarouselTemplateId | null;
+  carouselThemeId?: CarouselThemeId | null;
   carouselDocumentBase64?: string | null;
   carouselSlides?: CarouselSlide[] | null;
 };
 
 type GeneratedCarouselResponse = {
   title?: string;
+  recommendedTemplateId?: CarouselTemplateId;
+  templateId?: CarouselTemplateId;
+  firstComment?: string | null;
   slides?: CarouselSlide[];
   error?: string;
 };
@@ -84,14 +110,37 @@ const emptyVoiceState: VoiceScore = {
 };
 
 const defaultFirstComment = "Full carousel below — save this for later 👇";
+const generationStyleLabels: Record<CarouselGenerationStyle, string> = {
+  professional: "Professional",
+  bold: "Bold",
+  editorial: "Editorial",
+  tactical: "Tactical",
+};
+
+const roleLabels: Record<CarouselSlideRole, string> = {
+  cover: "Cover",
+  problem: "Problem",
+  insight: "Insight",
+  proof: "Proof",
+  checklist: "Checklist",
+  quote: "Quote",
+  framework: "Framework",
+  cta: "CTA",
+};
 
 function ensureEditorSlides(slides?: CarouselSlide[] | null) {
-  const normalized = (slides ?? []).map((slide) => ({
-    headline: slide.headline ?? "",
-    body: slide.body ?? "",
-    background: slide.background ?? "white",
-    imageDataUrl: slide.imageDataUrl ?? null,
-  }));
+  const normalized = normalizeCarouselSlides(
+    (slides ?? []).map((slide) => ({
+      headline: slide.headline ?? "",
+      body: slide.body ?? "",
+      background: slide.background ?? "white",
+      imageDataUrl: slide.imageDataUrl ?? null,
+      role: slide.role ?? null,
+      kicker: slide.kicker ?? "",
+      emphasis: slide.emphasis ?? "",
+      bullets: slide.bullets ?? [],
+    }))
+  );
 
   if (normalized.length >= DEFAULT_CAROUSEL_SLIDES) {
     return normalized.slice(0, MAX_CAROUSEL_SLIDES);
@@ -117,6 +166,14 @@ function formatPreviewTitle(value: string) {
   return value.trim() || "Quill carousel";
 }
 
+function parseBulletInput(value: string) {
+  return value
+    .split("\n")
+    .map((line) => line.replace(/^[-*]\s*/, "").trim().slice(0, MAX_CAROUSEL_BULLET))
+    .filter(Boolean)
+    .slice(0, MAX_CAROUSEL_BULLETS);
+}
+
 function openPdfBytes(bytes: Uint8Array) {
   const safeBytes = Uint8Array.from(bytes);
   const blob = new Blob([safeBytes], { type: "application/pdf" });
@@ -136,6 +193,11 @@ export function CarouselClient() {
   const [mode, setMode] = useState<CarouselMode>("builder");
   const [title, setTitle] = useState("Quill carousel");
   const [slides, setSlides] = useState<CarouselSlide[]>(createInitialSlides());
+  const [carouselTemplateId, setCarouselTemplateId] = useState<CarouselTemplateId>(
+    DEFAULT_CAROUSEL_TEMPLATE_ID
+  );
+  const [carouselThemeId, setCarouselThemeId] =
+    useState<CarouselThemeId>(DEFAULT_CAROUSEL_THEME_ID);
   const [activeSlideIndex, setActiveSlideIndex] = useState(0);
   const [coverSlide, setCoverSlide] = useState(false);
   const [voiceText, setVoiceText] = useState("");
@@ -153,6 +215,8 @@ export function CarouselClient() {
   const [loadPostError, setLoadPostError] = useState<string | null>(null);
   const [generationSource, setGenerationSource] = useState("");
   const [generationSlideCount, setGenerationSlideCount] = useState(DEFAULT_CAROUSEL_SLIDES);
+  const [generationStyle, setGenerationStyle] =
+    useState<CarouselGenerationStyle>("professional");
   const [generatingSlides, setGeneratingSlides] = useState(false);
 
   const scorableText = useMemo(
@@ -188,6 +252,13 @@ export function CarouselClient() {
 
         setTitle(post.documentTitle ?? "Quill carousel");
         setMode(post.carouselMode ?? "builder");
+        const restoredTemplateId = normalizeCarouselTemplateId(post.carouselTemplateId);
+        setCarouselTemplateId(restoredTemplateId);
+        setCarouselThemeId(
+          normalizeCarouselThemeId(
+            post.carouselThemeId ?? getCarouselTemplate(restoredTemplateId).defaultThemeId
+          )
+        );
         setCoverSlide(Boolean(post.coverSlide));
         setFirstComment(post.firstComment ?? defaultFirstComment);
         setFirstCommentOpen(Boolean(post.firstComment ?? defaultFirstComment));
@@ -398,7 +469,12 @@ export function CarouselClient() {
       const response = await fetch("/api/carousel/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sourceText, slideCount }),
+        body: JSON.stringify({
+          sourceText,
+          slideCount,
+          style: generationStyle,
+          templateId: carouselTemplateId,
+        }),
       });
       const data = (await response.json().catch(() => ({}))) as GeneratedCarouselResponse;
 
@@ -406,15 +482,23 @@ export function CarouselClient() {
         throw new Error(data.error ?? "Unable to generate carousel slides");
       }
 
-      const generatedSlides = (data.slides ?? [])
-        .slice(0, MAX_CAROUSEL_SLIDES)
-        .map((slide) => ({
-          headline: (slide.headline ?? "").slice(0, MAX_CAROUSEL_HEADLINE),
-          body: (slide.body ?? "").slice(0, MAX_CAROUSEL_BODY),
-          background: getCarouselBackgroundPreset(slide.background ?? "white").key,
-          imageDataUrl: null,
-        }))
-        .filter((slide) => slide.headline.trim()) as CarouselSlide[];
+      const generatedSlides = normalizeCarouselSlides(
+        (data.slides ?? [])
+          .slice(0, MAX_CAROUSEL_SLIDES)
+          .map((slide) => ({
+            headline: (slide.headline ?? "").slice(0, MAX_CAROUSEL_HEADLINE),
+            body: (slide.body ?? "").slice(0, MAX_CAROUSEL_BODY),
+            background: getCarouselBackgroundPreset(slide.background ?? "white").key,
+            imageDataUrl: null,
+            role: slide.role ?? null,
+            kicker: (slide.kicker ?? "").slice(0, MAX_CAROUSEL_KICKER),
+            emphasis: (slide.emphasis ?? "").slice(0, MAX_CAROUSEL_EMPHASIS),
+            bullets: (slide.bullets ?? [])
+              .map((bullet) => bullet.slice(0, MAX_CAROUSEL_BULLET))
+              .slice(0, MAX_CAROUSEL_BULLETS),
+          }))
+          .filter((slide) => slide.headline.trim())
+      );
 
       if (generatedSlides.length < MIN_CAROUSEL_SLIDES) {
         throw new Error("Generated slides were incomplete. Try a more detailed draft.");
@@ -422,6 +506,15 @@ export function CarouselClient() {
 
       setMode("builder");
       setTitle((data.title ?? "Quill carousel").slice(0, MAX_CAROUSEL_TITLE));
+      const nextTemplateId = normalizeCarouselTemplateId(
+        data.templateId ?? data.recommendedTemplateId ?? carouselTemplateId
+      );
+      setCarouselTemplateId(nextTemplateId);
+      setCarouselThemeId(getCarouselTemplate(nextTemplateId).defaultThemeId);
+      if (data.firstComment?.trim()) {
+        setFirstComment(data.firstComment.slice(0, 1250));
+        setFirstCommentOpen(true);
+      }
       setSlides(generatedSlides);
       setActiveSlideIndex(0);
       setVoiceText("");
@@ -445,6 +538,8 @@ export function CarouselClient() {
           postType: "carousel",
           documentTitle: formatPreviewTitle(title),
           carouselMode: mode,
+          carouselTemplateId,
+          carouselThemeId,
           content: mode === "upload" ? voiceText.trim() : undefined,
           platforms: ["linkedin"],
           carouselSlides: mode === "builder" ? slides : undefined,
@@ -476,7 +571,12 @@ export function CarouselClient() {
     setPreviewing(true);
     try {
       if (mode === "builder") {
-        const pdfBytes = await generateCarouselPDF(slides, coverSlide);
+        const pdfBytes = await generateCarouselPDF(
+          slides,
+          coverSlide,
+          carouselTemplateId,
+          carouselThemeId
+        );
         openPdfBytes(pdfBytes);
       } else if (pdfBase64) {
         openPdfBytes(base64ToPdfBytes(pdfBase64));
@@ -494,7 +594,11 @@ export function CarouselClient() {
     setPublishing(true);
     try {
       const finalPdfBase64 =
-        mode === "builder" ? bytesToBase64(await generateCarouselPDF(slides, coverSlide)) : pdfBase64;
+        mode === "builder"
+          ? bytesToBase64(
+              await generateCarouselPDF(slides, coverSlide, carouselTemplateId, carouselThemeId)
+            )
+          : pdfBase64;
 
       if (!finalPdfBase64) {
         throw new Error("Upload a PDF or images first");
@@ -507,6 +611,8 @@ export function CarouselClient() {
           postId: postId ?? undefined,
           title: formatPreviewTitle(title),
           carouselMode: mode,
+          carouselTemplateId,
+          carouselThemeId,
           slides: mode === "builder" ? slides : undefined,
           coverSlide,
           voiceText: mode === "upload" ? voiceText.trim() : undefined,
@@ -532,11 +638,26 @@ export function CarouselClient() {
   const ringOffset = 339 - (339 * score) / 100;
   const activePreviewIndex = Math.min(activeSlideIndex, Math.max(slides.length - 1, 0));
   const activePreviewSlide = slides[activePreviewIndex] ?? createEmptySlide();
-  const activePreviewPreset = getCarouselBackgroundPreset(activePreviewSlide.background);
-  const activePreviewTextColor = getCarouselTextColor(
-    activePreviewSlide.background,
-    Boolean(activePreviewSlide.imageDataUrl)
+  const selectedTemplate = getCarouselTemplate(carouselTemplateId);
+  const selectedTheme = getCarouselTheme(carouselThemeId);
+  const activePreviewRole = resolveCarouselSlideRole(
+    activePreviewSlide,
+    activePreviewIndex,
+    slides.length,
+    coverSlide
   );
+  const activePreviewVisuals = getCarouselTemplateVisuals(
+    selectedTemplate.id,
+    selectedTheme.id,
+    activePreviewSlide,
+    activePreviewRole
+  );
+  const activePreviewTextColor = activePreviewSlide.imageDataUrl
+    ? "#FFFFFF"
+    : activePreviewVisuals.text;
+  const activePreviewMutedColor = activePreviewSlide.imageDataUrl
+    ? "#E2E8F0"
+    : activePreviewVisuals.muted;
 
   return (
     <section className="space-y-4">
@@ -617,6 +738,22 @@ export function CarouselClient() {
                   placeholder="Paste a LinkedIn draft or outline..."
                 />
                 <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-end">
+                  <div className="w-full sm:w-40">
+                    <label className="text-sm font-medium text-ink">Style</label>
+                    <select
+                      value={generationStyle}
+                      onChange={(event) =>
+                        setGenerationStyle(normalizeCarouselGenerationStyle(event.target.value))
+                      }
+                      className="quill-input mt-2 bg-white"
+                    >
+                      {CAROUSEL_GENERATION_STYLES.map((style) => (
+                        <option key={style} value={style}>
+                          {generationStyleLabels[style]}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                   <div className="w-full sm:w-28">
                     <label className="text-sm font-medium text-ink">Slides</label>
                     <input
@@ -651,6 +788,77 @@ export function CarouselClient() {
                     )}
                     {generatingSlides ? "Generating..." : "Generate slides"}
                   </Button>
+                </div>
+              </div>
+
+              <div className="mt-5 rounded-md border border-line bg-white p-4">
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                  <div>
+                    <p className="text-sm font-semibold text-ink">Template</p>
+                    <p className="mt-1 text-xs leading-5 text-muted">
+                      Pick a professional layout; slide text remains editable.
+                    </p>
+                  </div>
+                  <div className="w-full lg:w-40">
+                    <label className="sr-only" htmlFor="carousel-theme">
+                      Theme
+                    </label>
+                    <select
+                      id="carousel-theme"
+                      value={carouselThemeId}
+                      onChange={(event) =>
+                        setCarouselThemeId(normalizeCarouselThemeId(event.target.value))
+                      }
+                      className="quill-input bg-white text-sm"
+                    >
+                      {CAROUSEL_THEMES.map((theme) => (
+                        <option key={theme.id} value={theme.id}>
+                          {theme.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                  {CAROUSEL_TEMPLATES.map((template) => {
+                    const theme = getCarouselTheme(carouselThemeId ?? template.defaultThemeId);
+                    const active = carouselTemplateId === template.id;
+                    return (
+                      <button
+                        key={template.id}
+                        type="button"
+                        onClick={() => {
+                          setCarouselTemplateId(template.id);
+                          if (carouselThemeId === DEFAULT_CAROUSEL_THEME_ID) {
+                            setCarouselThemeId(template.defaultThemeId);
+                          }
+                        }}
+                        className={cn(
+                          "min-h-[86px] rounded-md border p-3 text-left transition",
+                          active
+                            ? "border-brand bg-brand-light/35"
+                            : "border-line bg-white hover:border-brand/30"
+                        )}
+                      >
+                        <span className="flex items-center gap-2">
+                          <span
+                            className="h-5 w-5 rounded-sm border border-line"
+                            style={{
+                              background:
+                                template.id === "editorial-dark"
+                                  ? theme.darkSurface
+                                  : theme.accentSoft,
+                            }}
+                          />
+                          <span className="text-sm font-semibold text-ink">{template.name}</span>
+                        </span>
+                        <span className="mt-2 block text-xs leading-5 text-muted">
+                          {template.description}
+                        </span>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 
@@ -737,6 +945,43 @@ export function CarouselClient() {
                     )}
                   </div>
 
+                  <div className="mt-4 grid gap-4 sm:grid-cols-3">
+                    <div>
+                      <label className="text-sm font-medium text-ink">Role</label>
+                      <select
+                        value={activePreviewRole}
+                        onChange={(event) =>
+                          updateSlide(activePreviewIndex, {
+                            role: event.target.value as CarouselSlideRole,
+                          })
+                        }
+                        className="quill-input mt-2 bg-white"
+                      >
+                        {CAROUSEL_SLIDE_ROLES.map((role) => (
+                          <option key={role} value={role}>
+                            {roleLabels[role]}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="sm:col-span-2">
+                      <label className="text-sm font-medium text-ink">Kicker</label>
+                      <input
+                        value={activePreviewSlide.kicker ?? ""}
+                        onChange={(event) =>
+                          updateSlide(activePreviewIndex, {
+                            kicker: event.target.value.slice(0, MAX_CAROUSEL_KICKER),
+                          })
+                        }
+                        className="quill-input mt-2 bg-white"
+                        placeholder="Optional label above the headline"
+                      />
+                      <div className="mt-2 text-right text-xs text-muted">
+                        {(activePreviewSlide.kicker ?? "").length} / {MAX_CAROUSEL_KICKER}
+                      </div>
+                    </div>
+                  </div>
+
                   <div className="mt-4">
                     <label className="text-sm font-medium text-ink">Headline</label>
                     <input
@@ -755,6 +1000,23 @@ export function CarouselClient() {
                   </div>
 
                   <div className="mt-4">
+                    <label className="text-sm font-medium text-ink">Emphasis</label>
+                    <input
+                      value={activePreviewSlide.emphasis ?? ""}
+                      onChange={(event) =>
+                        updateSlide(activePreviewIndex, {
+                          emphasis: event.target.value.slice(0, MAX_CAROUSEL_EMPHASIS),
+                        })
+                      }
+                      className="quill-input mt-2 bg-white"
+                      placeholder="Optional stat, quote, or CTA line"
+                    />
+                    <div className="mt-2 text-right text-xs text-muted">
+                      {(activePreviewSlide.emphasis ?? "").length} / {MAX_CAROUSEL_EMPHASIS}
+                    </div>
+                  </div>
+
+                  <div className="mt-4">
                     <label className="text-sm font-medium text-ink">Body</label>
                     <textarea
                       value={activePreviewSlide.body}
@@ -767,6 +1029,23 @@ export function CarouselClient() {
                     />
                     <div className="mt-2 text-right text-xs text-muted">
                       {activePreviewSlide.body.length} / {MAX_CAROUSEL_BODY}
+                    </div>
+                  </div>
+
+                  <div className="mt-4">
+                    <label className="text-sm font-medium text-ink">Bullets</label>
+                    <textarea
+                      value={(activePreviewSlide.bullets ?? []).join("\n")}
+                      onChange={(event) =>
+                        updateSlide(activePreviewIndex, {
+                          bullets: parseBulletInput(event.target.value),
+                        })
+                      }
+                      className="quill-textarea mt-2 min-h-[92px] bg-white"
+                      placeholder="One bullet per line"
+                    />
+                    <div className="mt-2 text-right text-xs text-muted">
+                      {(activePreviewSlide.bullets ?? []).length} / {MAX_CAROUSEL_BULLETS} bullets
                     </div>
                   </div>
 
@@ -1061,7 +1340,7 @@ export function CarouselClient() {
                 style={{
                   backgroundColor: activePreviewSlide.imageDataUrl
                     ? undefined
-                    : activePreviewPreset.value,
+                    : activePreviewVisuals.background,
                   backgroundImage: activePreviewSlide.imageDataUrl
                     ? `url(${activePreviewSlide.imageDataUrl})`
                     : undefined,
@@ -1070,30 +1349,114 @@ export function CarouselClient() {
                 }}
               >
                 {activePreviewSlide.imageDataUrl && <div className="absolute inset-0 bg-black/30" />}
-                <div className="relative flex h-full gap-3">
-                  <div className="w-1 shrink-0 rounded-full bg-brand" />
-                  <div className="flex-1">
-                    <p
-                      style={{ color: activePreviewTextColor }}
-                      className={`${
-                        coverSlide && activePreviewIndex === 0
-                          ? "text-2xl font-semibold leading-9"
-                          : "text-lg font-semibold leading-7"
-                      }`}
-                    >
-                      {activePreviewSlide.headline || `Slide ${activePreviewIndex + 1}`}
-                    </p>
-                    {!(coverSlide && activePreviewIndex === 0) && (
+                {carouselTemplateId === "classic" ? (
+                  <div className="relative flex h-full gap-3">
+                    <div
+                      className="w-1 shrink-0 rounded-full"
+                      style={{ backgroundColor: activePreviewVisuals.accent }}
+                    />
+                    <div className="flex-1">
                       <p
-                        className="mt-4 whitespace-pre-wrap text-sm leading-6"
                         style={{ color: activePreviewTextColor }}
+                        className={`${
+                          activePreviewRole === "cover"
+                            ? "text-2xl font-semibold leading-9"
+                            : "text-lg font-semibold leading-7"
+                        }`}
                       >
-                        {activePreviewSlide.body ||
-                          "Supporting copy will appear here in the PDF preview."}
+                        {activePreviewSlide.headline || `Slide ${activePreviewIndex + 1}`}
                       </p>
+                      {activePreviewRole !== "cover" && (
+                        <p
+                          className="mt-4 whitespace-pre-wrap text-sm leading-6"
+                          style={{ color: activePreviewTextColor }}
+                        >
+                          {activePreviewSlide.body ||
+                            "Supporting copy will appear here in the PDF preview."}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="relative flex h-full flex-col">
+                    <div
+                      className="flex items-center justify-between text-[10px] font-semibold uppercase tracking-[0.08em]"
+                      style={{ color: activePreviewMutedColor }}
+                    >
+                      <span>{activePreviewSlide.kicker || roleLabels[activePreviewRole]}</span>
+                      <span>{String(activePreviewIndex + 1).padStart(2, "0")}</span>
+                    </div>
+
+                    <div
+                      className={cn(
+                        "mt-5 h-1.5 w-14 rounded-full",
+                        selectedTemplate.accentStrategy === "minimal" && "h-0.5"
+                      )}
+                      style={{ backgroundColor: activePreviewVisuals.accent }}
+                    />
+
+                    <div className="mt-5 min-h-0 flex-1">
+                      {activePreviewSlide.emphasis &&
+                      (activePreviewRole === "proof" || activePreviewRole === "quote") ? (
+                        <p
+                          className="text-3xl font-semibold leading-tight"
+                          style={{ color: activePreviewTextColor }}
+                        >
+                          {activePreviewSlide.emphasis}
+                        </p>
+                      ) : (
+                        <p
+                          className={cn(
+                            "font-semibold leading-tight",
+                            activePreviewRole === "cover" || activePreviewRole === "cta"
+                              ? "text-3xl"
+                              : "text-2xl"
+                          )}
+                          style={{ color: activePreviewTextColor }}
+                        >
+                          {activePreviewSlide.headline || `Slide ${activePreviewIndex + 1}`}
+                        </p>
+                      )}
+
+                      {activePreviewSlide.body && (
+                        <p
+                          className="mt-4 whitespace-pre-wrap text-sm leading-6"
+                          style={{ color: activePreviewMutedColor }}
+                        >
+                          {activePreviewSlide.body}
+                        </p>
+                      )}
+
+                      {(activePreviewSlide.bullets ?? []).length > 0 && (
+                        <div className="mt-4 space-y-2">
+                          {(activePreviewSlide.bullets ?? []).slice(0, 4).map((bullet, index) => (
+                            <div key={`${bullet}-${index}`} className="flex gap-2">
+                              <span
+                                className="mt-1.5 h-2 w-2 shrink-0 rounded-full"
+                                style={{ backgroundColor: activePreviewVisuals.accent }}
+                              />
+                              <span
+                                className="text-xs leading-5"
+                                style={{ color: activePreviewTextColor }}
+                              >
+                                {bullet}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {activePreviewRole === "cta" && (
+                      <div
+                        className="mt-4 rounded-md px-3 py-2 text-xs font-semibold text-white"
+                        style={{ backgroundColor: activePreviewVisuals.accent }}
+                      >
+                        {activePreviewSlide.emphasis || "Save this for later"}
+                      </div>
                     )}
                   </div>
-                </div>
+                )}
               </div>
               <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
                 {slides.map((slide, index) => (
