@@ -5,10 +5,21 @@ import { requireRequestUser } from "@/lib/auth";
 import {
   CAROUSEL_BACKGROUND_PRESETS,
   CAROUSEL_MODES,
+  CAROUSEL_SLIDE_ROLES,
+  CAROUSEL_TEMPLATE_IDS,
+  CAROUSEL_THEME_IDS,
   buildCarouselContent,
+  getCarouselTemplate,
   MAX_CAROUSEL_BODY,
+  MAX_CAROUSEL_BULLET,
+  MAX_CAROUSEL_BULLETS,
+  MAX_CAROUSEL_EMPHASIS,
   MAX_CAROUSEL_HEADLINE,
+  MAX_CAROUSEL_KICKER,
   MAX_CAROUSEL_TITLE,
+  normalizeCarouselSlides,
+  normalizeCarouselTemplateId,
+  normalizeCarouselThemeId,
   type CarouselSlide,
 } from "@/lib/carousel";
 import { base64ToPdfBytes } from "@/lib/carousel-pdf";
@@ -22,6 +33,10 @@ const carouselSlideSchema = z.object({
   headline: z.string().trim().min(1, "Each slide needs a headline").max(MAX_CAROUSEL_HEADLINE),
   body: z.string().trim().max(MAX_CAROUSEL_BODY),
   background: z.enum(CAROUSEL_BACKGROUND_PRESETS.map((preset) => preset.key) as [string, ...string[]]),
+  role: z.enum(CAROUSEL_SLIDE_ROLES).optional(),
+  kicker: z.string().trim().max(MAX_CAROUSEL_KICKER).optional(),
+  emphasis: z.string().trim().max(MAX_CAROUSEL_EMPHASIS).optional(),
+  bullets: z.array(z.string().trim().max(MAX_CAROUSEL_BULLET)).max(MAX_CAROUSEL_BULLETS).optional(),
   imageDataUrl: z
     .string()
     .trim()
@@ -34,6 +49,8 @@ const publishCarouselSchema = z.object({
   postId: z.string().optional(),
   title: z.string().trim().min(1, "Title is required").max(MAX_CAROUSEL_TITLE),
   carouselMode: z.enum(CAROUSEL_MODES),
+  carouselTemplateId: z.enum(CAROUSEL_TEMPLATE_IDS).optional(),
+  carouselThemeId: z.enum(CAROUSEL_THEME_IDS).optional(),
   slides: z.array(carouselSlideSchema).min(2).max(10).optional(),
   coverSlide: z.boolean().default(false),
   voiceText: z.string().trim().optional(),
@@ -109,12 +126,12 @@ export async function POST(request: NextRequest) {
     throw error;
   }
 
-  const slides = (parsed.data.slides ?? []).map((slide) => ({
-    headline: slide.headline.trim(),
-    body: slide.body.trim(),
-    background: slide.background,
-    imageDataUrl: slide.imageDataUrl ?? null,
-  })) as CarouselSlide[];
+  const slides = normalizeCarouselSlides(parsed.data.slides ?? []) as CarouselSlide[];
+  const carouselTemplate = getCarouselTemplate(parsed.data.carouselTemplateId);
+  const carouselTemplateId = normalizeCarouselTemplateId(carouselTemplate.id);
+  const carouselThemeId = normalizeCarouselThemeId(
+    parsed.data.carouselThemeId ?? carouselTemplate.defaultThemeId
+  );
   const content =
     parsed.data.carouselMode === "builder"
       ? buildCarouselContent(slides)
@@ -168,6 +185,8 @@ export async function POST(request: NextRequest) {
           postType: "carousel",
           documentTitle: parsed.data.title.trim(),
           carouselMode: parsed.data.carouselMode,
+          carouselTemplateId,
+          carouselThemeId,
           content,
           firstComment,
           carouselSlides:
@@ -189,6 +208,8 @@ export async function POST(request: NextRequest) {
           postType: "carousel",
           documentTitle: parsed.data.title.trim(),
           carouselMode: parsed.data.carouselMode,
+          carouselTemplateId,
+          carouselThemeId,
           content,
           firstComment,
           carouselSlides:

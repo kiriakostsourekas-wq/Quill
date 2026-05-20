@@ -15,6 +15,10 @@ const groqMocks = vi.hoisted(() => ({
   create: vi.fn(),
 }));
 
+const performanceMocks = vi.hoisted(() => ({
+  getRecentPerformanceFeedbackPromptContext: vi.fn(),
+}));
+
 vi.mock("@/lib/auth", () => ({
   requireRequestUser: authMocks.requireRequestUser,
 }));
@@ -35,9 +39,15 @@ vi.mock("@/lib/groq", () => ({
   },
 }));
 
+vi.mock("@/lib/performance-feedback", () => ({
+  getRecentPerformanceFeedbackPromptContext:
+    performanceMocks.getRecentPerformanceFeedbackPromptContext,
+}));
+
 import { POST } from "@/app/api/carousel/generate/route";
 import {
   MAX_CAROUSEL_BODY,
+  MAX_CAROUSEL_BULLET,
   MAX_CAROUSEL_HEADLINE,
   MAX_CAROUSEL_SLIDES,
 } from "@/lib/carousel";
@@ -82,6 +92,7 @@ describe("carousel generation route", () => {
       usesLists: false,
       summary: "Clear, practical, claim-led writing.",
     });
+    performanceMocks.getRecentPerformanceFeedbackPromptContext.mockResolvedValue(null);
   });
 
   it("requires a session user", async () => {
@@ -132,26 +143,81 @@ describe("carousel generation route", () => {
     expect(response.status).toBe(200);
     expect(data).toEqual({
       title: "Clearer Systems",
+      recommendedTemplateId: "classic",
+      templateId: "classic",
+      firstComment: null,
       slides: [
         {
           headline: "Start with ownership",
           body: "Clear handoffs make decisions easier.",
           background: "white",
           imageDataUrl: null,
+          role: "cover",
+          kicker: "",
+          emphasis: "",
+          bullets: [],
         },
         {
           headline: "Reduce interpretation",
           body: "A useful process removes guesswork.",
           background: "white",
           imageDataUrl: null,
+          role: "insight",
+          kicker: "",
+          emphasis: "",
+          bullets: [],
         },
         {
           headline: "Keep judgment",
           body: "Structure should support judgment, not replace it.",
           background: "white",
           imageDataUrl: null,
+          role: "cta",
+          kicker: "",
+          emphasis: "",
+          bullets: [],
         },
       ],
+    });
+  });
+
+  it("returns structured slides with template, roles, bullets, and first comment", async () => {
+    mockModelResponse({
+      title: "Operating System",
+      recommendedTemplateId: "playbook-checklist",
+      firstComment: "Save this before your next planning meeting.",
+      slides: [
+        {
+          role: "cover",
+          kicker: "Playbook",
+          headline: "Make work easier to start",
+          body: "Teams move faster when the next action is obvious.",
+        },
+        {
+          role: "checklist",
+          headline: "Remove ambiguity",
+          body: "Define the handoff before work starts.",
+          bullets: ["Owner", "Definition of done", "Next decision"],
+        },
+      ],
+    });
+
+    const response = await POST(
+      jsonRequest({
+        sourceText: "A useful draft.",
+        slideCount: 2,
+        style: "tactical",
+        templateId: "framework",
+      })
+    );
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.templateId).toBe("playbook-checklist");
+    expect(data.firstComment).toBe("Save this before your next planning meeting.");
+    expect(data.slides[1]).toMatchObject({
+      role: "checklist",
+      bullets: ["Owner", "Definition of done", "Next decision"],
     });
   });
 
@@ -180,6 +246,21 @@ describe("carousel generation route", () => {
     expect(response.status).toBe(502);
   });
 
+  it("rejects malformed roles and templates from the model", async () => {
+    mockModelResponse({
+      title: "Bad schema",
+      recommendedTemplateId: "not-a-template",
+      slides: [
+        { role: "unknown", headline: "One", body: "Body" },
+        { role: "cta", headline: "Two", body: "Body" },
+      ],
+    });
+
+    const response = await POST(jsonRequest({ sourceText: "A useful draft.", slideCount: 2 }));
+
+    expect(response.status).toBe(502);
+  });
+
   it("truncates generated headlines and body copy to carousel limits", async () => {
     mockModelResponse({
       title: "Limits",
@@ -195,5 +276,26 @@ describe("carousel generation route", () => {
     expect(response.status).toBe(200);
     expect(data.slides[0].headline).toHaveLength(MAX_CAROUSEL_HEADLINE);
     expect(data.slides[0].body).toHaveLength(MAX_CAROUSEL_BODY);
+  });
+
+  it("truncates generated bullets to carousel limits", async () => {
+    mockModelResponse({
+      title: "Bullet Limits",
+      slides: [
+        {
+          headline: "Checklist",
+          body: "Short body",
+          bullets: Array.from({ length: 8 }, () => "B".repeat(MAX_CAROUSEL_BULLET + 20)),
+        },
+        { headline: "Second slide", body: "Short body" },
+      ],
+    });
+
+    const response = await POST(jsonRequest({ sourceText: "A useful draft.", slideCount: 2 }));
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.slides[0].bullets).toHaveLength(5);
+    expect(data.slides[0].bullets[0]).toHaveLength(MAX_CAROUSEL_BULLET);
   });
 });

@@ -5,10 +5,20 @@ import { requireRequestUser } from "@/lib/auth";
 import {
   CAROUSEL_BACKGROUND_PRESETS,
   CAROUSEL_MODES,
+  CAROUSEL_SLIDE_ROLES,
+  CAROUSEL_TEMPLATE_IDS,
+  CAROUSEL_THEME_IDS,
   buildCarouselContent,
+  getCarouselTemplate,
   MAX_CAROUSEL_BODY,
+  MAX_CAROUSEL_BULLET,
+  MAX_CAROUSEL_BULLETS,
+  MAX_CAROUSEL_EMPHASIS,
   MAX_CAROUSEL_HEADLINE,
+  MAX_CAROUSEL_KICKER,
   MAX_CAROUSEL_TITLE,
+  normalizeCarouselTemplateId,
+  normalizeCarouselThemeId,
   normalizeCarouselSlides,
 } from "@/lib/carousel";
 import { PlanLimitError, assertFreePlanPostLimit, assertPlanAllowsPlatforms } from "@/lib/plans";
@@ -26,6 +36,10 @@ const carouselSlideSchema = z.object({
   headline: z.string().trim().max(MAX_CAROUSEL_HEADLINE, "Headline must be 60 characters or less"),
   body: z.string().trim().max(MAX_CAROUSEL_BODY, "Body must be 200 characters or less"),
   background: z.enum(CAROUSEL_BACKGROUND_PRESETS.map((preset) => preset.key) as [string, ...string[]]),
+  role: z.enum(CAROUSEL_SLIDE_ROLES).optional(),
+  kicker: z.string().trim().max(MAX_CAROUSEL_KICKER).optional(),
+  emphasis: z.string().trim().max(MAX_CAROUSEL_EMPHASIS).optional(),
+  bullets: z.array(z.string().trim().max(MAX_CAROUSEL_BULLET)).max(MAX_CAROUSEL_BULLETS).optional(),
   imageDataUrl: z
     .string()
     .trim()
@@ -49,6 +63,8 @@ const createPostSchema = z.object({
   content: z.string().trim().optional(),
   documentTitle: z.string().trim().max(MAX_CAROUSEL_TITLE, "Title must be 120 characters or less").optional(),
   carouselMode: z.enum(CAROUSEL_MODES).optional(),
+  carouselTemplateId: z.enum(CAROUSEL_TEMPLATE_IDS).optional(),
+  carouselThemeId: z.enum(CAROUSEL_THEME_IDS).optional(),
   platforms: z.array(platformSchema).min(1).max(2),
   scheduledAt: scheduledAtSchema.optional(),
   firstComment: firstCommentSchema.nullable().optional(),
@@ -117,6 +133,13 @@ export async function GET(request: NextRequest) {
         postType: true,
         content: true,
         firstComment: true,
+        documentTitle: true,
+        carouselMode: true,
+        carouselTemplateId: true,
+        carouselThemeId: true,
+        carouselSlides: true,
+        carouselDocumentBase64: true,
+        coverSlide: true,
         platforms: true,
         status: true,
         scheduledAt: true,
@@ -255,10 +278,22 @@ export async function POST(request: NextRequest) {
     ? parsed.data.firstComment?.trim() || null
     : null;
   const carouselMode = parsed.data.postType === "carousel" ? parsed.data.carouselMode ?? "builder" : null;
+  const carouselTemplate =
+    parsed.data.postType === "carousel" ? getCarouselTemplate(parsed.data.carouselTemplateId) : null;
+  const carouselTemplateId =
+    parsed.data.postType === "carousel" ? normalizeCarouselTemplateId(carouselTemplate?.id) : null;
+  const carouselThemeId =
+    parsed.data.postType === "carousel"
+      ? normalizeCarouselThemeId(parsed.data.carouselThemeId ?? carouselTemplate?.defaultThemeId)
+      : null;
+  const normalizedCarouselSlides =
+    parsed.data.postType === "carousel" && carouselMode === "builder"
+      ? normalizeCarouselSlides(parsed.data.carouselSlides ?? [])
+      : [];
   const content =
     parsed.data.postType === "carousel"
       ? carouselMode === "builder"
-        ? buildCarouselContent(normalizeCarouselSlides(parsed.data.carouselSlides ?? []))
+        ? buildCarouselContent(normalizedCarouselSlides)
         : parsed.data.content?.trim() ?? ""
       : parsed.data.content?.trim() ?? "";
   const { result } = content.trim()
@@ -273,9 +308,11 @@ export async function POST(request: NextRequest) {
       firstComment,
       documentTitle: parsed.data.postType === "carousel" ? parsed.data.documentTitle?.trim() ?? "Quill carousel" : null,
       carouselMode,
+      carouselTemplateId,
+      carouselThemeId,
       carouselSlides:
         parsed.data.postType === "carousel" && carouselMode === "builder"
-          ? parsed.data.carouselSlides ?? []
+          ? normalizedCarouselSlides
           : Prisma.JsonNull,
       carouselDocumentBase64:
         parsed.data.postType === "carousel" && carouselMode === "upload"

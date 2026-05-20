@@ -54,6 +54,8 @@ model Post {
   firstComment         String?
   documentTitle        String?
   carouselMode         String?
+  carouselTemplateId   String?
+  carouselThemeId      String?
   carouselSlides       Json?
   carouselDocumentBase64 String?
   coverSlide           Boolean             @default(false)

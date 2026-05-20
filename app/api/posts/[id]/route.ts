@@ -5,10 +5,20 @@ import { requireRequestUser } from "@/lib/auth";
 import {
   CAROUSEL_BACKGROUND_PRESETS,
   CAROUSEL_MODES,
+  CAROUSEL_SLIDE_ROLES,
+  CAROUSEL_TEMPLATE_IDS,
+  CAROUSEL_THEME_IDS,
   buildCarouselContent,
+  getCarouselTemplate,
   MAX_CAROUSEL_BODY,
+  MAX_CAROUSEL_BULLET,
+  MAX_CAROUSEL_BULLETS,
+  MAX_CAROUSEL_EMPHASIS,
   MAX_CAROUSEL_HEADLINE,
+  MAX_CAROUSEL_KICKER,
   MAX_CAROUSEL_TITLE,
+  normalizeCarouselTemplateId,
+  normalizeCarouselThemeId,
   normalizeCarouselSlides,
   type CarouselSlide,
 } from "@/lib/carousel";
@@ -27,6 +37,10 @@ const carouselSlideSchema = z.object({
   headline: z.string().trim().max(MAX_CAROUSEL_HEADLINE, "Headline must be 60 characters or less"),
   body: z.string().trim().max(MAX_CAROUSEL_BODY, "Body must be 200 characters or less"),
   background: z.enum(CAROUSEL_BACKGROUND_PRESETS.map((preset) => preset.key) as [string, ...string[]]),
+  role: z.enum(CAROUSEL_SLIDE_ROLES).optional(),
+  kicker: z.string().trim().max(MAX_CAROUSEL_KICKER).optional(),
+  emphasis: z.string().trim().max(MAX_CAROUSEL_EMPHASIS).optional(),
+  bullets: z.array(z.string().trim().max(MAX_CAROUSEL_BULLET)).max(MAX_CAROUSEL_BULLETS).optional(),
   imageDataUrl: z
     .string()
     .trim()
@@ -49,6 +63,8 @@ const updatePostSchema = z.object({
   content: z.string().trim().optional(),
   documentTitle: z.string().trim().max(MAX_CAROUSEL_TITLE, "Title must be 120 characters or less").optional(),
   carouselMode: z.enum(CAROUSEL_MODES).optional(),
+  carouselTemplateId: z.enum(CAROUSEL_TEMPLATE_IDS).optional(),
+  carouselThemeId: z.enum(CAROUSEL_THEME_IDS).optional(),
   platforms: z.array(platformSchema).min(1).max(2).optional(),
   scheduledAt: scheduledAtSchema.nullable().optional(),
   firstComment: firstCommentSchema.nullable().optional(),
@@ -188,6 +204,22 @@ export async function PATCH(
     parsed.data.carouselSlides !== undefined
       ? parsed.data.carouselSlides
       : ((existing.carouselSlides as CarouselSlide[] | null) ?? null);
+  const normalizedCarouselSlides =
+    nextPostType === "carousel" && nextCarouselMode === "builder"
+      ? normalizeCarouselSlides(nextCarouselSlides ?? [])
+      : [];
+  const nextCarouselTemplate =
+    nextPostType === "carousel"
+      ? getCarouselTemplate(parsed.data.carouselTemplateId ?? existing.carouselTemplateId)
+      : null;
+  const nextCarouselTemplateId =
+    nextPostType === "carousel" ? normalizeCarouselTemplateId(nextCarouselTemplate?.id) : null;
+  const nextCarouselThemeId =
+    nextPostType === "carousel"
+      ? normalizeCarouselThemeId(
+          parsed.data.carouselThemeId ?? existing.carouselThemeId ?? nextCarouselTemplate?.defaultThemeId
+        )
+      : null;
   const nextDocumentBase64 =
     parsed.data.carouselDocumentBase64 !== undefined
       ? parsed.data.carouselDocumentBase64?.trim() || null
@@ -195,7 +227,7 @@ export async function PATCH(
   const nextContent =
     nextPostType === "carousel"
       ? nextCarouselMode === "builder"
-        ? buildCarouselContent(normalizeCarouselSlides(nextCarouselSlides ?? []))
+        ? buildCarouselContent(normalizedCarouselSlides)
         : parsed.data.content ?? existing.content
       : parsed.data.content ?? existing.content;
   const nextFirstComment = nextPlatforms.includes("linkedin")
@@ -218,9 +250,11 @@ export async function PATCH(
           ? parsed.data.documentTitle?.trim() ?? existing.documentTitle
           : null,
       carouselMode: nextCarouselMode,
+      carouselTemplateId: nextCarouselTemplateId,
+      carouselThemeId: nextCarouselThemeId,
       carouselSlides:
         nextPostType === "carousel" && nextCarouselMode === "builder"
-          ? nextCarouselSlides ?? []
+          ? normalizedCarouselSlides
           : Prisma.JsonNull,
       carouselDocumentBase64:
         nextPostType === "carousel" && nextCarouselMode === "upload"
